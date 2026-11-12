@@ -346,7 +346,34 @@ def _drop_copies_read_in_place() -> None:
         pass
 
 
+# The unit conversion table (F_SACRIFICE_MST) is loaded on demand, so it only works once its list is in the game's
+# table registry. The 9.1.0 library registers it only when FUNCTION_SP_CLASSUP is valid (0x1d3d154 bl
+# UnitClassupUtils::isEnableSPClassup; 0x1d3d158 tbz w0 -> skip), and both places that register the lists (the
+# registry's creation and TitleScene::initConnect) run before F_FUNCTION_MST is loaded. So the table never loads:
+# Convert to Prism / Fragments lists nothing and NV awakening shows "Unit Not in Possession" until the player
+# returns to the title screen. The tbz becomes a nop; the screens stay gated on FUNCTION_SP_CLASSUP elsewhere.
+SACRIFICE_REGISTER_PATCH = {'9.1.0': (0x1D3D158, bytes.fromhex('a0000036'), bytes.fromhex('1f2003d5'))}
+
+
+def _patch_library() -> None:
+    """Apply SACRIFICE_REGISTER_PATCH to the installed library, once. Only a library the install recorded as a known
+    version is touched, and only when the bytes there are the original instruction."""
+    try:
+        version = json.loads((CLIENT / 'installed.json').read_text(encoding='utf-8')).get('known_version')
+        if version not in SACRIFICE_REGISTER_PATCH:
+            return
+        offset, original, patched = SACRIFICE_REGISTER_PATCH[version]
+        with open(GAME / 'libgame.so', 'r+b') as library:
+            library.seek(offset)
+            if library.read(4) == original:
+                library.seek(offset)
+                library.write(patched)
+    except (OSError, ValueError):
+        pass                                             # the game still starts; conversion needs Return to Title
+
+
 def start_game(port: int, extra_environment: dict | None = None) -> subprocess.Popen:
+    _patch_library()
     environment = dict(os.environ)
     environment['FFBE_SERVER'] = f'127.0.0.1:{port}'
     environment['FFBE_PICTURES'] = str(HOME / 'pictures')      # where the camera button in the game window saves
