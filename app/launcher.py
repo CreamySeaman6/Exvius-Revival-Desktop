@@ -154,7 +154,32 @@ def install_apk(path: Path, report=lambda text, done, total: None) -> dict:
 # ----------------------------------------------------------------------------------------------------
 # Step 2: the server's game data
 # ----------------------------------------------------------------------------------------------------
+def _use_system_certificates() -> None:
+    """Verify HTTPS the way the browsers on this computer do.
+
+    The bundled Python only trusts the root certificates already sitting in the Windows store. Windows itself fetches
+    missing roots on demand (so a fresh PC may not have the one GitHub's download servers chain to yet), and
+    antivirus HTTPS scanning or a network filter adds its own trusted root that the browsers accept. Either way the
+    game-data download failed with CERTIFICATE_VERIFY_FAILED. truststore hands verification to Windows' own
+    certificate checks; if it is missing, the certifi bundle is used instead. Certificates are verified either way.
+    """
+    try:
+        import truststore
+        truststore.inject_into_ssl()
+        return
+    except Exception:
+        pass
+    try:
+        import ssl
+        import certifi
+        context = ssl.create_default_context(cafile=certifi.where())
+        urllib.request.install_opener(urllib.request.build_opener(urllib.request.HTTPSHandler(context=context)))
+    except Exception:
+        pass
+
+
 def _fetcher():
+    _use_system_certificates()
     os.environ['FFBE_DATA_DIR'] = str(DATA)
     os.environ['FFBE_MANIFEST'] = str(SERVER / 'latest.json')
     if str(SERVER) not in sys.path:

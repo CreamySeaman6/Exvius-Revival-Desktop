@@ -29,7 +29,7 @@ runner\font.ttf and app\fonts\
 python\
   CPython 3.12 (python-build-standalone build)   Python Software Foundation License; see python\LICENSE.txt
   cryptography (Apache-2.0 / BSD-3-Clause), cffi (MIT), pycparser (BSD-3-Clause), PyYAML (MIT),
-  Pillow (MIT-CMU), tzdata (Apache-2.0)
+  Pillow (MIT-CMU), tzdata (Apache-2.0), truststore (MIT), certifi (MPL-2.0)
 
 No game code or game data is part of this program. The game library, assets and data are taken
 from the user's own APK and from the game-data download during setup.

@@ -34,7 +34,8 @@ The package has three built parts. All three were built on Linux (Ubuntu 24.04).
 
 pack.sh puts the package together: the three parts, Python 3.12 for Windows
 (python-build-standalone, "install_only" build) with the server's packages (cryptography, PyYAML,
-tzdata, Pillow), the launcher (app\), and the server. The server is not part of this source: it
+tzdata, Pillow) and the launcher's (truststore, certifi: HTTPS checks for the game-data download),
+the launcher (app\), and the server. The server is not part of this source: it
 is the engine of Exvius Revival for iOS, https://github.com/CreamySeaman6/Exvius-revival-ios, and
 pack.sh copies it from a checkout of that repository (source/server, ios-server/serve.py,
 ios-server/fetch_data.py, ios-server/docker-compose.yml, data/latest.json and its README):
