@@ -1,0 +1,578 @@
+// Generated: the C library functions the game library imports, by name, for the static build.
+extern void __cxa_atexit();
+extern void __cxa_finalize();
+extern void __memcpy_chk();
+extern void __memmove_chk();
+extern void __memset_chk();
+extern void __open_2();
+extern void __read_chk();
+extern void __stack_chk_fail();
+extern void __strcat_chk();
+extern void __strcpy_chk();
+extern void __strncat_chk();
+extern void __strncpy_chk();
+extern void __vsnprintf_chk();
+extern void __vsprintf_chk();
+extern void access();
+extern void alphasort();
+extern void arc4random();
+extern void atof();
+extern void atoi();
+extern void atol();
+extern void atoll();
+extern void basename();
+extern void bsearch();
+extern void btowc();
+extern void calloc();
+extern void chmod();
+extern void clearerr();
+extern void clock();
+extern void clock_gettime();
+extern void clock_nanosleep();
+extern void close();
+extern void closedir();
+extern void difftime();
+extern void div();
+extern void dup2();
+extern void fclose();
+extern void fcntl();
+extern void fdopen();
+extern void feof();
+extern void ferror();
+extern void fflush();
+extern void fgets();
+extern void fileno();
+extern void flock();
+extern void fopen();
+extern void fprintf();
+extern void fputc();
+extern void fputs();
+extern void fread();
+extern void free();
+extern void freelocale();
+extern void frexp();
+extern void frexpf();
+extern void fseek();
+extern void fseeko();
+extern void fstat();
+extern void ftell();
+extern void ftello();
+extern void fwrite();
+extern void gai_strerror();
+extern void getauxval();
+extern void getc();
+extern void getegid();
+extern void getenv();
+extern void geteuid();
+extern void getgid();
+extern void getpid();
+extern void getpriority();
+extern void gettid();
+extern void gettimeofday();
+extern void getuid();
+extern void gmtime();
+extern void gmtime_r();
+extern void inet_ntop();
+extern void inet_pton();
+extern void ioctl();
+extern void isalnum();
+extern void isalpha();
+extern void isgraph();
+extern void islower();
+extern void isprint();
+extern void isspace();
+extern void isupper();
+extern void iswalpha();
+extern void iswblank();
+extern void iswcntrl();
+extern void iswdigit();
+extern void iswlower();
+extern void iswprint();
+extern void iswpunct();
+extern void iswspace();
+extern void iswupper();
+extern void iswxdigit();
+extern void isxdigit();
+extern void ldexp();
+extern void ldexpf();
+extern void localeconv();
+extern void localtime();
+extern void lseek();
+extern void madvise();
+extern void malloc();
+extern void mbrlen();
+extern void mbrtowc();
+extern void mbsnrtowcs();
+extern void mbsrtowcs();
+extern void mbtowc();
+extern void memalign();
+extern void memchr();
+extern void memcmp();
+extern void memcpy();
+extern void memmove();
+extern void memrchr();
+extern void memset();
+extern void mkdir();
+extern void mktime();
+extern void mlock();
+extern void mmap();
+extern void modf();
+extern void mprotect();
+extern void munmap();
+extern void nanosleep();
+extern void newlocale();
+extern void open();
+extern void opendir();
+extern void perror();
+extern void posix_memalign();
+extern void printf();
+extern void pthread_attr_init();
+extern void pthread_attr_setschedparam();
+extern void pthread_attr_setschedpolicy();
+extern void pthread_cond_broadcast();
+extern void pthread_cond_destroy();
+extern void pthread_cond_init();
+extern void pthread_cond_signal();
+extern void pthread_cond_timedwait();
+extern void pthread_cond_wait();
+extern void pthread_create();
+extern void pthread_detach();
+extern void pthread_equal();
+extern void pthread_getschedparam();
+extern void pthread_getspecific();
+extern void pthread_join();
+extern void pthread_key_create();
+extern void pthread_key_delete();
+extern void pthread_mutex_destroy();
+extern void pthread_mutex_init();
+extern void pthread_mutex_lock();
+extern void pthread_mutex_trylock();
+extern void pthread_mutex_unlock();
+extern void pthread_mutexattr_destroy();
+extern void pthread_mutexattr_init();
+extern void pthread_mutexattr_settype();
+extern void pthread_once();
+extern void pthread_rwlock_destroy();
+extern void pthread_rwlock_init();
+extern void pthread_rwlock_rdlock();
+extern void pthread_rwlock_unlock();
+extern void pthread_rwlock_wrlock();
+extern void pthread_self();
+extern void pthread_setspecific();
+extern void putchar();
+extern void puts();
+extern void qsort();
+extern void rand();
+extern void read();
+extern void readdir();
+extern void realloc();
+extern void realpath();
+extern void remove();
+extern void rename();
+extern void scandir();
+extern void sched_yield();
+extern void sem_destroy();
+extern void sem_init();
+extern void sem_post();
+extern void sem_wait();
+extern void setbuf();
+extern void setlocale();
+extern void setpriority();
+extern void sigdelset();
+extern void sigfillset();
+extern void snprintf();
+extern void sprintf();
+extern void srand();
+extern void sscanf();
+extern void stat();
+extern void strcasecmp();
+extern void strcat();
+extern void strchr();
+extern void strcmp();
+extern void strcoll();
+extern void strcpy();
+extern void strcspn();
+extern void strdup();
+extern void strerror();
+extern void strerror_r();
+extern void strftime();
+extern void strlen();
+extern void strncasecmp();
+extern void strncat();
+extern void strncmp();
+extern void strncpy();
+extern void strpbrk();
+extern void strptime();
+extern void strrchr();
+extern void strspn();
+extern void strstr();
+extern void strtod();
+extern void strtof();
+extern void strtok();
+extern void strtok_r();
+extern void strtol();
+extern void strtold();
+extern void strtold_l();
+extern void strtoll();
+extern void strtoll_l();
+extern void strtoul();
+extern void strtoull();
+extern void strtoull_l();
+extern void strxfrm();
+extern void swprintf();
+extern void syscall();
+extern void sysconf();
+extern void tcgetattr();
+extern void tcsetattr();
+extern void time();
+extern void timegm();
+extern void tolower();
+extern void toupper();
+extern void towlower();
+extern void towupper();
+extern void ungetc();
+extern void uselocale();
+extern void usleep();
+extern void vasprintf();
+extern void vfprintf();
+extern void vsnprintf();
+extern void vsprintf();
+extern void vsscanf();
+extern void wcrtomb();
+extern void wcscoll();
+extern void wcslen();
+extern void wcsnrtombs();
+extern void wcstod();
+extern void wcstof();
+extern void wcstol();
+extern void wcstold();
+extern void wcstoll();
+extern void wcstoul();
+extern void wcstoull();
+extern void wcsxfrm();
+extern void wctob();
+extern void wmemchr();
+extern void wmemcmp();
+extern void wmemcpy();
+extern void wmemmove();
+extern void wmemset();
+extern void write();
+extern void acos();
+extern void acosf();
+extern void asin();
+extern void asinf();
+extern void atan();
+extern void atan2();
+extern void atan2f();
+extern void cos();
+extern void cosf();
+extern void exp();
+extern void exp2f();
+extern void expf();
+extern void fmodf();
+extern void log();
+extern void log10();
+extern void log10f();
+extern void logf();
+extern void pow();
+extern void powf();
+extern void sin();
+extern void sincos();
+extern void sincosf();
+extern void sinf();
+extern void sqrt();
+extern void sqrtf();
+extern void tan();
+extern void tanf();
+static const struct { const char *name; void *ptr; } tab[] = {
+    {"__cxa_atexit", (void *)__cxa_atexit},
+    {"__cxa_finalize", (void *)__cxa_finalize},
+    {"__memcpy_chk", (void *)__memcpy_chk},
+    {"__memmove_chk", (void *)__memmove_chk},
+    {"__memset_chk", (void *)__memset_chk},
+    {"__open_2", (void *)__open_2},
+    {"__read_chk", (void *)__read_chk},
+    {"__stack_chk_fail", (void *)__stack_chk_fail},
+    {"__strcat_chk", (void *)__strcat_chk},
+    {"__strcpy_chk", (void *)__strcpy_chk},
+    {"__strncat_chk", (void *)__strncat_chk},
+    {"__strncpy_chk", (void *)__strncpy_chk},
+    {"__vsnprintf_chk", (void *)__vsnprintf_chk},
+    {"__vsprintf_chk", (void *)__vsprintf_chk},
+    {"access", (void *)access},
+    {"alphasort", (void *)alphasort},
+    {"arc4random", (void *)arc4random},
+    {"atof", (void *)atof},
+    {"atoi", (void *)atoi},
+    {"atol", (void *)atol},
+    {"atoll", (void *)atoll},
+    {"basename", (void *)basename},
+    {"bsearch", (void *)bsearch},
+    {"btowc", (void *)btowc},
+    {"calloc", (void *)calloc},
+    {"chmod", (void *)chmod},
+    {"clearerr", (void *)clearerr},
+    {"clock", (void *)clock},
+    {"clock_gettime", (void *)clock_gettime},
+    {"clock_nanosleep", (void *)clock_nanosleep},
+    {"close", (void *)close},
+    {"closedir", (void *)closedir},
+    {"difftime", (void *)difftime},
+    {"div", (void *)div},
+    {"dup2", (void *)dup2},
+    {"fclose", (void *)fclose},
+    {"fcntl", (void *)fcntl},
+    {"fdopen", (void *)fdopen},
+    {"feof", (void *)feof},
+    {"ferror", (void *)ferror},
+    {"fflush", (void *)fflush},
+    {"fgets", (void *)fgets},
+    {"fileno", (void *)fileno},
+    {"flock", (void *)flock},
+    {"fopen", (void *)fopen},
+    {"fprintf", (void *)fprintf},
+    {"fputc", (void *)fputc},
+    {"fputs", (void *)fputs},
+    {"fread", (void *)fread},
+    {"free", (void *)free},
+    {"freelocale", (void *)freelocale},
+    {"frexp", (void *)frexp},
+    {"frexpf", (void *)frexpf},
+    {"fseek", (void *)fseek},
+    {"fseeko", (void *)fseeko},
+    {"fstat", (void *)fstat},
+    {"ftell", (void *)ftell},
+    {"ftello", (void *)ftello},
+    {"fwrite", (void *)fwrite},
+    {"gai_strerror", (void *)gai_strerror},
+    {"getauxval", (void *)getauxval},
+    {"getc", (void *)getc},
+    {"getegid", (void *)getegid},
+    {"getenv", (void *)getenv},
+    {"geteuid", (void *)geteuid},
+    {"getgid", (void *)getgid},
+    {"getpid", (void *)getpid},
+    {"getpriority", (void *)getpriority},
+    {"gettid", (void *)gettid},
+    {"gettimeofday", (void *)gettimeofday},
+    {"getuid", (void *)getuid},
+    {"gmtime", (void *)gmtime},
+    {"gmtime_r", (void *)gmtime_r},
+    {"inet_ntop", (void *)inet_ntop},
+    {"inet_pton", (void *)inet_pton},
+    {"ioctl", (void *)ioctl},
+    {"isalnum", (void *)isalnum},
+    {"isalpha", (void *)isalpha},
+    {"isgraph", (void *)isgraph},
+    {"islower", (void *)islower},
+    {"isprint", (void *)isprint},
+    {"isspace", (void *)isspace},
+    {"isupper", (void *)isupper},
+    {"iswalpha", (void *)iswalpha},
+    {"iswblank", (void *)iswblank},
+    {"iswcntrl", (void *)iswcntrl},
+    {"iswdigit", (void *)iswdigit},
+    {"iswlower", (void *)iswlower},
+    {"iswprint", (void *)iswprint},
+    {"iswpunct", (void *)iswpunct},
+    {"iswspace", (void *)iswspace},
+    {"iswupper", (void *)iswupper},
+    {"iswxdigit", (void *)iswxdigit},
+    {"isxdigit", (void *)isxdigit},
+    {"ldexp", (void *)ldexp},
+    {"ldexpf", (void *)ldexpf},
+    {"localeconv", (void *)localeconv},
+    {"localtime", (void *)localtime},
+    {"lseek", (void *)lseek},
+    {"madvise", (void *)madvise},
+    {"malloc", (void *)malloc},
+    {"mbrlen", (void *)mbrlen},
+    {"mbrtowc", (void *)mbrtowc},
+    {"mbsnrtowcs", (void *)mbsnrtowcs},
+    {"mbsrtowcs", (void *)mbsrtowcs},
+    {"mbtowc", (void *)mbtowc},
+    {"memalign", (void *)memalign},
+    {"memchr", (void *)memchr},
+    {"memcmp", (void *)memcmp},
+    {"memcpy", (void *)memcpy},
+    {"memmove", (void *)memmove},
+    {"memrchr", (void *)memrchr},
+    {"memset", (void *)memset},
+    {"mkdir", (void *)mkdir},
+    {"mktime", (void *)mktime},
+    {"mlock", (void *)mlock},
+    {"mmap", (void *)mmap},
+    {"modf", (void *)modf},
+    {"mprotect", (void *)mprotect},
+    {"munmap", (void *)munmap},
+    {"nanosleep", (void *)nanosleep},
+    {"newlocale", (void *)newlocale},
+    {"open", (void *)open},
+    {"opendir", (void *)opendir},
+    {"perror", (void *)perror},
+    {"posix_memalign", (void *)posix_memalign},
+    {"printf", (void *)printf},
+    {"pthread_attr_init", (void *)pthread_attr_init},
+    {"pthread_attr_setschedparam", (void *)pthread_attr_setschedparam},
+    {"pthread_attr_setschedpolicy", (void *)pthread_attr_setschedpolicy},
+    {"pthread_cond_broadcast", (void *)pthread_cond_broadcast},
+    {"pthread_cond_destroy", (void *)pthread_cond_destroy},
+    {"pthread_cond_init", (void *)pthread_cond_init},
+    {"pthread_cond_signal", (void *)pthread_cond_signal},
+    {"pthread_cond_timedwait", (void *)pthread_cond_timedwait},
+    {"pthread_cond_wait", (void *)pthread_cond_wait},
+    {"pthread_create", (void *)pthread_create},
+    {"pthread_detach", (void *)pthread_detach},
+    {"pthread_equal", (void *)pthread_equal},
+    {"pthread_getschedparam", (void *)pthread_getschedparam},
+    {"pthread_getspecific", (void *)pthread_getspecific},
+    {"pthread_join", (void *)pthread_join},
+    {"pthread_key_create", (void *)pthread_key_create},
+    {"pthread_key_delete", (void *)pthread_key_delete},
+    {"pthread_mutex_destroy", (void *)pthread_mutex_destroy},
+    {"pthread_mutex_init", (void *)pthread_mutex_init},
+    {"pthread_mutex_lock", (void *)pthread_mutex_lock},
+    {"pthread_mutex_trylock", (void *)pthread_mutex_trylock},
+    {"pthread_mutex_unlock", (void *)pthread_mutex_unlock},
+    {"pthread_mutexattr_destroy", (void *)pthread_mutexattr_destroy},
+    {"pthread_mutexattr_init", (void *)pthread_mutexattr_init},
+    {"pthread_mutexattr_settype", (void *)pthread_mutexattr_settype},
+    {"pthread_once", (void *)pthread_once},
+    {"pthread_rwlock_destroy", (void *)pthread_rwlock_destroy},
+    {"pthread_rwlock_init", (void *)pthread_rwlock_init},
+    {"pthread_rwlock_rdlock", (void *)pthread_rwlock_rdlock},
+    {"pthread_rwlock_unlock", (void *)pthread_rwlock_unlock},
+    {"pthread_rwlock_wrlock", (void *)pthread_rwlock_wrlock},
+    {"pthread_self", (void *)pthread_self},
+    {"pthread_setspecific", (void *)pthread_setspecific},
+    {"putchar", (void *)putchar},
+    {"puts", (void *)puts},
+    {"qsort", (void *)qsort},
+    {"rand", (void *)rand},
+    {"read", (void *)read},
+    {"readdir", (void *)readdir},
+    {"realloc", (void *)realloc},
+    {"realpath", (void *)realpath},
+    {"remove", (void *)remove},
+    {"rename", (void *)rename},
+    {"scandir", (void *)scandir},
+    {"sched_yield", (void *)sched_yield},
+    {"sem_destroy", (void *)sem_destroy},
+    {"sem_init", (void *)sem_init},
+    {"sem_post", (void *)sem_post},
+    {"sem_wait", (void *)sem_wait},
+    {"setbuf", (void *)setbuf},
+    {"setlocale", (void *)setlocale},
+    {"setpriority", (void *)setpriority},
+    {"sigdelset", (void *)sigdelset},
+    {"sigfillset", (void *)sigfillset},
+    {"snprintf", (void *)snprintf},
+    {"sprintf", (void *)sprintf},
+    {"srand", (void *)srand},
+    {"sscanf", (void *)sscanf},
+    {"stat", (void *)stat},
+    {"strcasecmp", (void *)strcasecmp},
+    {"strcat", (void *)strcat},
+    {"strchr", (void *)strchr},
+    {"strcmp", (void *)strcmp},
+    {"strcoll", (void *)strcoll},
+    {"strcpy", (void *)strcpy},
+    {"strcspn", (void *)strcspn},
+    {"strdup", (void *)strdup},
+    {"strerror", (void *)strerror},
+    {"strerror_r", (void *)strerror_r},
+    {"strftime", (void *)strftime},
+    {"strlen", (void *)strlen},
+    {"strncasecmp", (void *)strncasecmp},
+    {"strncat", (void *)strncat},
+    {"strncmp", (void *)strncmp},
+    {"strncpy", (void *)strncpy},
+    {"strpbrk", (void *)strpbrk},
+    {"strptime", (void *)strptime},
+    {"strrchr", (void *)strrchr},
+    {"strspn", (void *)strspn},
+    {"strstr", (void *)strstr},
+    {"strtod", (void *)strtod},
+    {"strtof", (void *)strtof},
+    {"strtok", (void *)strtok},
+    {"strtok_r", (void *)strtok_r},
+    {"strtol", (void *)strtol},
+    {"strtold", (void *)strtold},
+    {"strtold_l", (void *)strtold_l},
+    {"strtoll", (void *)strtoll},
+    {"strtoll_l", (void *)strtoll_l},
+    {"strtoul", (void *)strtoul},
+    {"strtoull", (void *)strtoull},
+    {"strtoull_l", (void *)strtoull_l},
+    {"strxfrm", (void *)strxfrm},
+    {"swprintf", (void *)swprintf},
+    {"syscall", (void *)syscall},
+    {"sysconf", (void *)sysconf},
+    {"tcgetattr", (void *)tcgetattr},
+    {"tcsetattr", (void *)tcsetattr},
+    {"time", (void *)time},
+    {"timegm", (void *)timegm},
+    {"tolower", (void *)tolower},
+    {"toupper", (void *)toupper},
+    {"towlower", (void *)towlower},
+    {"towupper", (void *)towupper},
+    {"ungetc", (void *)ungetc},
+    {"uselocale", (void *)uselocale},
+    {"usleep", (void *)usleep},
+    {"vasprintf", (void *)vasprintf},
+    {"vfprintf", (void *)vfprintf},
+    {"vsnprintf", (void *)vsnprintf},
+    {"vsprintf", (void *)vsprintf},
+    {"vsscanf", (void *)vsscanf},
+    {"wcrtomb", (void *)wcrtomb},
+    {"wcscoll", (void *)wcscoll},
+    {"wcslen", (void *)wcslen},
+    {"wcsnrtombs", (void *)wcsnrtombs},
+    {"wcstod", (void *)wcstod},
+    {"wcstof", (void *)wcstof},
+    {"wcstol", (void *)wcstol},
+    {"wcstold", (void *)wcstold},
+    {"wcstoll", (void *)wcstoll},
+    {"wcstoul", (void *)wcstoul},
+    {"wcstoull", (void *)wcstoull},
+    {"wcsxfrm", (void *)wcsxfrm},
+    {"wctob", (void *)wctob},
+    {"wmemchr", (void *)wmemchr},
+    {"wmemcmp", (void *)wmemcmp},
+    {"wmemcpy", (void *)wmemcpy},
+    {"wmemmove", (void *)wmemmove},
+    {"wmemset", (void *)wmemset},
+    {"write", (void *)write},
+    {"acos", acos},
+    {"acosf", acosf},
+    {"asin", asin},
+    {"asinf", asinf},
+    {"atan", atan},
+    {"atan2", atan2},
+    {"atan2f", atan2f},
+    {"cos", cos},
+    {"cosf", cosf},
+    {"exp", exp},
+    {"exp2f", exp2f},
+    {"expf", expf},
+    {"fmodf", fmodf},
+    {"log", log},
+    {"log10", log10},
+    {"log10f", log10f},
+    {"logf", logf},
+    {"pow", pow},
+    {"powf", powf},
+    {"sin", sin},
+    {"sincos", sincos},
+    {"sincosf", sincosf},
+    {"sinf", sinf},
+    {"sqrt", sqrt},
+    {"sqrtf", sqrtf},
+    {"tan", tan},
+    {"tanf", tanf},
+};
+static int same(const char *a, const char *b) { while (*a && *a == *b) { a++; b++; } return *a == *b; }
+void *libc_lookup(const char *name) {
+    for (unsigned i = 0; i < sizeof tab / sizeof *tab; i++) if (same(tab[i].name, name)) return tab[i].ptr;
+    return 0;
+}

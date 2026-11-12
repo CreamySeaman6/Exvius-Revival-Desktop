@@ -1,0 +1,22 @@
+# Built parts and packages
+build/
+dist/
+final/
+*.zip
+__pycache__/
+# Game files must never be committed: they come from the user's own APK and the data download
+*.apk
+*.xapk
+*.apks
+libgame.so
+assets/
+client/
+data/
+save/
+logs/
+# Test output
+*.log
+*.raw
+*.ppm
+test/out/
+*.rgba

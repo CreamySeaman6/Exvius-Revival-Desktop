@@ -1,0 +1,35 @@
+Third-party software in Exvius Revival Desktop
+==============================================
+
+runner\runner.exe is built from the code in source\runner and links these libraries:
+  dynarmic (azahar-emu fork)      0BSD            https://github.com/azahar-emu/dynarmic
+    with fmt (MIT), mcl (MIT), xbyak (BSD-3-Clause), Zydis and Zycore (MIT), robin-map (MIT),
+    and Boost headers (Boost Software License 1.0)
+  the mingw-w64 runtime and winpthreads (public domain / MIT / BSD style; see mingw-w64's COPYING)
+  libstdc++ and libgcc (GPL-3.0 with the GCC Runtime Library Exception)
+
+runner\SDL2.dll
+  Simple DirectMedia Layer 2      zlib licence    https://libsdl.org
+
+runner\game.elf is built from the code in source\guest and links:
+  GNU C Library (glibc), statically    LGPL-2.1-or-later
+    The complete source of game.elf and its build script are in source\guest, so it can be rebuilt
+    and relinked against another glibc, as that licence asks.
+  stb_truetype                         public domain / MIT
+
+runner\runner.exe also contains stb_truetype and stb_image_write (public domain / MIT).
+
+runner\font.ttf and app\fonts\
+  Roboto Regular, Bold, Italic    Apache License 2.0   https://fonts.google.com/specimen/Roboto
+  Cinzel Bold                     SIL Open Font License 1.1 (app\fonts\Cinzel-OFL.txt)
+                                  Copyright 2020 The Cinzel Project Authors  https://github.com/NDISCOVER/Cinzel
+  DejaVu Sans                     Bitstream Vera licence with DejaVu changes (free to use and redistribute)
+                                  https://dejavu-fonts.github.io
+
+python\
+  CPython 3.12 (python-build-standalone build)   Python Software Foundation License; see python\LICENSE.txt
+  cryptography (Apache-2.0 / BSD-3-Clause), cffi (MIT), pycparser (BSD-3-Clause), PyYAML (MIT),
+  Pillow (MIT-CMU), tzdata (Apache-2.0)
+
+No game code or game data is part of this program. The game library, assets and data are taken
+from the user's own APK and from the game-data download during setup.
