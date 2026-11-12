@@ -222,6 +222,65 @@ static void keep_music_through_notice_movies(void) {
     logf_("[loader] notice movies no longer stop the music\n");
 }
 
+// Tables the game downloads in the background (the batch after log-in on a new install or after a server update:
+// about 150 tables, 40 MB; the server advertises every table at a new version, so all of them are in it) were only
+// written to disk and their versions recorded. BackgroundDownloader::update and ::onMstLoadFinished read them into
+// memory only when a flag of the downloader is set, which it is not on this path, so the game kept running on what it
+// had at start-up until the next start. The first visit to the Vortex in such a session then found no "other world"
+// town (DefineMst OTHER_WORLD_TOWN_ID, 9001, in TownMstList), dereferenced NULL in GateEntryScene::initialize and the
+// game closed. The flag's test (cbz) becomes a nop in both functions, so the downloaded tables are read in at once,
+// on the path the game itself takes when the flag is set.
+static int patch_cbz_to_nop(const char *symbol, int index) {
+    uint32_t *fn = lib_sym(symbol);
+    // ldrb w8, [x19, #48] ; cbz w8, <skip the loadMstList call>
+    if (!fn || fn[index - 1] != 0x3940C268 || fn[index] != 0x340000C8) return 0;
+    fn[index] = 0xD503201F;                                           // nop
+    __builtin___clear_cache((char *)(fn + index), (char *)(fn + index + 1));
+    return 1;
+}
+static void load_background_tables_at_once(void) {
+    int n = patch_cbz_to_nop("_ZN20BackgroundDownloader6updateEf", 20) + patch_cbz_to_nop("_ZN20BackgroundDownloader17onMstLoadFinishedEv", 14);
+    logf_("[loader] tables downloaded in the background are read in at once (%d of 2 places)\n", n);
+}
+
+// Should the town still be missing when the Vortex opens (tables that were never downloaded: "Download after
+// tutorial" chosen on a new install defers them to the next log-in), the game is restarted with a message instead of
+// closing: the next log-in downloads them. Exit code 75 makes the launcher start the game again.
+static void (*gate_initialize)(void *);
+static void gate_initialize_hook(void *scene) {
+    static void *(*towns)(void), *(*town)(void *, int), *(*defines)(void); static int (*define)(void *, const char *);
+    if (!towns) {
+        towns = lib_sym("_ZN11TownMstList6sharedEv"); town = lib_sym("_ZN11TownMstList6getMstEi");
+        defines = lib_sym("_ZN9DefineMst6sharedEv"); define = lib_sym("_ZN9DefineMst11getIntValueEPKc");
+    }
+    if (towns && town && defines && define) {
+        int id = define(defines(), "OTHER_WORLD_TOWN_ID");
+        if (!town(towns(), id)) {
+            logf_("[loader] Vortex: town %d is not in the game's tables yet; restarting the game so they are downloaded\n", id);
+            if (g_runner && !getenv("FFBE_QUIET_RESTART"))
+                hc(HC_MESSAGE, (long)"Exvius Revival Desktop", (long)"The Vortex needs game data that has not been downloaded yet.\n\n"
+                   "The game now restarts. Log in, accept the download, then open the Vortex again.", 0, 0);
+            exit(75);
+        }
+    }
+    gate_initialize(scene);
+}
+static void check_the_vortex_town(void) {
+    uint32_t *fn = lib_sym("_ZN14GateEntryScene10initializeEv");
+    // sub sp,sp,#0x50 ; stp x24,x23,[sp,#16] ; stp x22,x21,[sp,#32] ; stp x20,x19,[sp,#48]: none depends on its address
+    if (!fn || ((uintptr_t)fn & 7) || fn[0] != 0xD10143FF || fn[1] != 0xA9015FF8 || fn[2] != 0xA90257F6 || fn[3] != 0xA9034FF4) return;
+    uint32_t *t = mmap(NULL, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0);
+    if (t == MAP_FAILED) return;
+    memcpy(t, fn, 16);                                                // the four instructions moved here,
+    t[4] = 0x58000050; t[5] = 0xD61F0200;                             // then ldr x16, #8 ; br x16
+    *(uint64_t *)(t + 6) = (uint64_t)(fn + 4);                        // back to the fifth
+    __builtin___clear_cache((char *)t, (char *)(t + 8));
+    gate_initialize = (void (*)(void *))t;
+    fn[0] = 0x58000050; fn[1] = 0xD61F0200;                           // ldr x16, #8 ; br x16
+    *(uint64_t *)(fn + 2) = (uint64_t)gate_initialize_hook;
+    __builtin___clear_cache((char *)fn, (char *)(fn + 4));
+}
+
 void stub_report(void) {
     logf_("\n== unimplemented imports that were called ==\n");
     for (int i = 0; i < n_stubs; i++) if (stub_calls[i]) logf_("  %8lu  %s\n", stub_calls[i], stub_names[i]);
@@ -412,6 +471,8 @@ int main(int argc, char **argv) {
     JNIEnv_ *env = jni_env();
     install_traces();
     keep_music_through_notice_movies();
+    load_background_tables_at_once();
+    check_the_vortex_town();
     int (*onload)(void *, void *) = lib_sym("JNI_OnLoad");
     int v = onload(vm, NULL);
     logf_("[jni] JNI_OnLoad returned 0x%x\n", v);

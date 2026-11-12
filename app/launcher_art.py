@@ -224,14 +224,20 @@ def text_layer(text: str, face: str, size: float, colour, spacing: float = 0.0, 
     return layer
 
 
+def text_length(text: str, face: str, size: float) -> float:
+    """The width `text_layer` draws `text` at. Measured at the size it is drawn at: the font at `size` alone is
+    rounded to whole pixels (12.5 became 12) and came out up to 6% narrower than the drawn line."""
+    k = 3 if size < 22 else 2 if size < 40 else 1
+    return font(face, size * k).getlength(text) / k
+
+
 def wrap(text: str, face: str, size: float, width: float) -> list[str]:
-    fnt = font(face, size)
     out = []
     for paragraph in text.split('\n'):
         line = ''
         for word in paragraph.split():
             trial = (line + ' ' + word).strip()
-            if fnt.getlength(trial) > width and line:
+            if text_length(trial, face, size) > width and line:
                 out.append(line)
                 line = word
             else:

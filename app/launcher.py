@@ -59,6 +59,7 @@ MODIFIED_MARK = b'com/exvius/local/NativeRules'
 MODIFIED_TEXT = ('This APK is the Exvius Offline Android app. Its game library was changed to work inside that app and '
                  'does not start here (the game window stays black). Exvius Revival Desktop needs the original '
                  f'FINAL FANTASY BRAVE EXVIUS {GAME_VERSION} APK, Global version: the game as it came from the app store.')
+CHOOSE_AGAIN = ' Choose "Use a different APK" in the start window.'
 NO_WINDOW = 0x08000000 if WINDOWS else 0   # CREATE_NO_WINDOW
 RESTART_CODE = 75                           # runner exit code: start the game again
 
@@ -140,6 +141,18 @@ def install_apk(path: Path, report=lambda text, done, total: None) -> dict:
     if modified:
         shutil.rmtree(staging, ignore_errors=True)
         raise SetupError(MODIFIED_TEXT)
+    # Another version of the game, or a different build labelled 9.1.0: refused here instead of crashing later.
+    import game_check
+    version_name, version_code = game_check.apk_version(packages)
+    known = KNOWN_LIBRARIES.get(library_hash)
+    if not known:
+        problem = game_check.library_problem(staging / 'libgame.so')
+        if not problem and version_name and version_name != GAME_VERSION:
+            problem = (f'This APK is FINAL FANTASY BRAVE EXVIUS {version_name}. Exvius Revival Desktop runs version '
+                       f'{GAME_VERSION} only (Global): its server and data are made for that version.')
+        if problem:
+            shutil.rmtree(staging, ignore_errors=True)
+            raise SetupError(problem)
     for package, info in entries:
         target = staging / info.filename
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -157,7 +170,9 @@ def install_apk(path: Path, report=lambda text, done, total: None) -> dict:
     staging.rename(GAME)
     (GAME / 'files').mkdir(exist_ok=True)
     shutil.copyfile(RUNNER_DIR / 'font.ttf', CLIENT / 'font.ttf')
-    record = {'apk': path.name, 'library_sha256': library_hash, 'known_version': KNOWN_LIBRARIES.get(library_hash),
+    record = {'apk': path.name, 'library_sha256': library_hash, 'known_version': known,
+              'apk_version': version_name, 'apk_version_code': version_code,
+              'library_size': (GAME / 'libgame.so').stat().st_size,
               'assets': len(entries), 'installed_at': time.strftime('%Y-%m-%d %H:%M:%S')}
     (CLIENT / 'installed.json').write_text(json.dumps(record, indent=1), encoding='utf-8')
     return record
@@ -369,17 +384,18 @@ def start_game(port: int, extra_environment: dict | None = None) -> subprocess.P
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
 
 
-def library_is_modified() -> bool:
-    """Is the installed game library the Exvius Offline app's (installed by an earlier version of this program)?
-    Looked up once and kept in client/installed.json."""
+def library_problem() -> str | None:
+    """Why the installed game library cannot run (installed by an earlier version of this program, which did not
+    check as much), or None. Looked up once and kept in client/installed.json."""
     record_path = CLIENT / 'installed.json'
     try:
         record = json.loads(record_path.read_text(encoding='utf-8'))
     except (OSError, ValueError):
-        return False
+        return None
     if record.get('known_version'):
-        return False
-    if 'modified' not in record:
+        return None
+    changed = False
+    if 'modified' not in record:                     # the Exvius Offline app's library (0.1.0 installed it)
         found, tail = False, b''
         try:
             with open(GAME / 'libgame.so', 'rb') as source:
@@ -389,26 +405,34 @@ def library_is_modified() -> bool:
                         break
                     tail = block[-len(MODIFIED_MARK):]
         except OSError:
-            return False
-        record['modified'] = found
+            return None
+        record['modified'], changed = found, True
+    if 'problem' not in record:                      # another build of the game (0.1.2 and earlier installed it)
+        import game_check
+        record['problem'], changed = game_check.library_problem(GAME / 'libgame.so'), True
+    if changed:
         try:
             record_path.write_text(json.dumps(record, indent=1), encoding='utf-8')
         except OSError:
             pass
-    return bool(record['modified'])
+    if record['modified']:
+        return MODIFIED_TEXT
+    return record['problem']
 
 
 def play(extra_environment: dict | None = None, on_started=lambda: None) -> int:
-    if library_is_modified():
-        raise SetupError(MODIFIED_TEXT + ' Choose "Use a different APK" in the start window.')
+    problem = library_problem()
+    if problem:
+        raise SetupError(problem + CHOOSE_AGAIN)
     server, port = start_server()
     try:
         while True:
             game = start_game(port, extra_environment)
             on_started()
             code = game.wait()
-            if code != RESTART_CODE:        # the game asks for one restart after its first table download
+            if code != RESTART_CODE:        # the game asks for a restart (see guest/jni.c and guest/loader.c)
                 return code
+            _rotate(CLIENT / 'runner.log')  # keep the log of the run that asked for it (client/runner.log.1)
     finally:
         stop_server(server)
 

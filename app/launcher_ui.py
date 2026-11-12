@@ -149,7 +149,7 @@ def _text(text: str, face: str, size: float, colour, shadow: bool) -> Image.Imag
 
 
 def text_width(text: str, face: str, size: float) -> float:
-    return art.font(face, size).getlength(text)
+    return art.text_length(text, face, size)
 
 
 def _lay(image: Image.Image, layer: Image.Image, x: int, y: int) -> None:

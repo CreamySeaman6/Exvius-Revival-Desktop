@@ -113,9 +113,135 @@ def page_picture(port: int, query: str) -> tuple[int, bytes]:
     return 200, b''.join(out)
 
 
+# ----------------------------------------------------------------------------------------------------
+# Summon banner art that is not on this computer. The deal banners' art (step-ups, free dailies, value
+# summons...) is downloaded by the server from the Wayback Machine after it starts (deal_art.py), one file
+# every half second or slower; before that has finished, or when the archive cannot be reached, the server
+# answers 404. The game treats a failed banner download as a lost connection: "A connection error has
+# occurred" on the Summon screen, then back to the title (a user's report on 0.1.2, reproduced here with the
+# archive unreachable). A summon banner that would be a 404 is answered with a plain titled stand-in instead.
+# The game keeps every banner file it has downloaded, so each stand-in is listed in
+# save/banner-standins.txt; once the real file is on this computer the game's copy is deleted and the game
+# downloads the real one the next time it shows that banner.
+# ----------------------------------------------------------------------------------------------------
+_STANDIN_LOCK = threading.Lock()
+_GACHA_ART = '/static_banner/gacha/'
+
+
+def _standin_list() -> Path:
+    return Path(os.environ.get('FFBE_SERVER_ROOT', HOME / 'save')) / 'banner-standins.txt'
+
+
+def standin_picture(rel: str) -> bytes:
+    """A titled stand-in for the summon banner picture `rel` (the game's path, e.g. en/sd/static_banner/gacha/sub/x-fit1.png)."""
+    import banner_fit
+    import deal_art
+    plain = banner_fit.is_plain(rel)
+    real = banner_fit.real_rel(rel)
+    name = os.path.basename(real)
+    title, size = '', ((640, 392) if '/gacha/sub/' in '/' + real else (640, 160))
+    try:
+        for target, _url, label, dims in deal_art._targets():
+            if target == name:
+                title, size = label, dims
+                break
+    except Exception:  # noqa: BLE001 - an untitled stand-in is still better than the connection error
+        pass
+    data = deal_art.render(title, size)
+    if banner_fit.wants(real):
+        data, _ = banner_fit.fit(data, banner_fit.BASE_FRAME if plain else banner_fit.FRAME)
+    return data
+
+
+def note_standin(rel: str) -> None:
+    with _STANDIN_LOCK:
+        path = _standin_list()
+        try:
+            known = set(path.read_text(encoding='utf-8').split()) if path.is_file() else set()
+            if rel not in known:
+                with open(path, 'a', encoding='utf-8') as out:
+                    out.write(rel + '\n')
+        except OSError:
+            pass
+
+
+def replace_standins(log=print) -> int:
+    """Delete the game's copy of each stand-in whose real picture is now here, so the game downloads the real one."""
+    import banner_fit
+    import data_paths
+    game_files = HOME / 'client' / 'game' / 'files'
+    with _STANDIN_LOCK:
+        path = _standin_list()
+        if not path.is_file():
+            return 0
+        try:
+            names = path.read_text(encoding='utf-8').split()
+        except OSError:
+            return 0
+        kept, replaced = [], 0
+        for rel in names:
+            real = os.path.basename(banner_fit.real_rel(rel))
+            if os.path.isfile(os.path.join(data_paths.DEAL_ART_ROOT, real)):
+                try:
+                    (game_files / rel).unlink(missing_ok=True)
+                    replaced += 1
+                    continue
+                except OSError:
+                    pass
+            kept.append(rel)
+        try:
+            if kept:
+                path.write_text(''.join(r + '\n' for r in kept), encoding='utf-8')
+            else:
+                path.unlink(missing_ok=True)
+        except OSError:
+            pass
+    if replaced:
+        log(f'[desktop] {replaced} stand-in banner picture(s) will be replaced by the real ones')
+    return replaced
+
+
 def with_pages(handler, port: int):
     class Handler(handler):
+        def _gacha_art_or_standin(self) -> bool:
+            """Serve a summon banner picture through the server; answer a 404 with a stand-in. True when handled."""
+            import io
+            import urllib.parse
+            rel = urllib.parse.unquote(self.path.split('?', 1)[0]).lstrip('/')
+            if rel.startswith('banner/'):
+                rel = rel[len('banner/'):].lstrip('/')
+            if _GACHA_ART not in '/' + rel or not rel.lower().endswith('.png') or '..' in rel:
+                return False
+            real_out, buffer = self.wfile, io.BytesIO()
+            self.wfile = buffer
+            try:
+                super().do_GET()
+            finally:
+                self.wfile = real_out
+            answer = buffer.getvalue()
+            if not answer.startswith(b'HTTP/1.1 404') and not answer.startswith(b'HTTP/1.0 404'):
+                real_out.write(answer)
+                return True
+            try:
+                data = standin_picture(rel)
+            except Exception as exc:  # noqa: BLE001 - then the 404 as it was
+                print(f'[desktop] no stand-in for {rel}: {exc!r}', flush=True)
+                real_out.write(answer)
+                return True
+            note_standin(rel)
+            print(f'[desktop] {rel} is not on this computer yet; a stand-in picture was sent', flush=True)
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/octet-stream')
+            self.send_header('Content-Length', str(len(data)))
+            self.send_header('Connection', 'close')
+            self.end_headers()
+            self.wfile.write(data)
+            self.close_connection = True
+            return True
+
         def do_GET(self):
+            if _GACHA_ART in self.path and self._gacha_art_or_standin():
+                return
             if self.path.startswith('/__desktop/page?'):
                 try:
                     status, body = page_picture(port, self.path.split('?', 1)[1])
@@ -174,8 +300,10 @@ def main() -> int:
 
     def fetch_deal_art():
         try:
+            replace_standins(serve.log)               # real pictures fetched in an earlier session
             import deal_art
             deal_art.fetch(log=serve.log)
+            replace_standins(serve.log)
         except Exception as exc:  # noqa: BLE001
             serve.log(f'deal art step failed: {exc!r}')
 

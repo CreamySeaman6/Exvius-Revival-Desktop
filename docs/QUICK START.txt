@@ -3,7 +3,8 @@ Exvius Revival Desktop: quick start
 
 You need: Windows 10 or 11 (64-bit), your own FINAL FANTASY BRAVE EXVIUS 9.1.0 APK (Android,
 Global version; .apk, .xapk or .apks), and about 31 GB of free disk space (15 GB once set up).
-The APK must be the original game. The Exvius Offline app's APK does not work here.
+The APK must be the original game. The Exvius Offline app's APK does not work here, and nor do
+other versions of the game. In the 9.1.0 APK, lib/arm64-v8a/libgame.so is 60,410,728 bytes.
 
 1. Unpack this folder somewhere with room, for example C:\Games\ExviusRevivalDesktop.
    Keep the folder together.

@@ -64,7 +64,11 @@ GROUPS = [
     ('History replay', 'Summons, Vortex events and shops arrive in the order Global got them, a few weeks of history per real week.', [
         _t('EXVIUS_REPLAY', 'Follow Global\'s history',
            'On: each week brings the summons, events and shop stock of the next slice of Global\'s history, and permanent summons only '
-           'hold units released by then. Off: the random weekly rotation below.'),
+           'hold units released by then. Off: the random weekly rotation below. Turning off "Rotate summons weekly" turns this off too.'),
+        _t('EXVIUS_REPLAY_FULL_RUNS', 'Banners and events stay up for their whole run',
+           'On: a banner or event is on offer in every week that overlaps its whole Global run, so long ones such as weekly free '
+           'summons and anniversary campaigns last several weeks, and some weeks are busier than others. Off: each banner shows '
+           'only in the week its start date falls in.'),
         _x('EXVIUS_REPLAY_START', 'History starts at', 'The date your first week shows, as year-month-day. 2016-12-16 is the Noctis banner. '
            'Used when a replay starts; see "Start the history over" below.', '2016-12-16'),
         _c('EXVIUS_REPLAY_PACE', 'Speed', 'How much of Global\'s history passes each real week. The first choice slows to two weeks per week from Global\'s first Neo Vision banner (August 2020).', '3,2@2020-08-20',
@@ -83,7 +87,9 @@ GROUPS = [
         _c('EXVIUS_ROTATION_DAY', 'The week changes on', 'The day new summons and events arrive.', '6', DAYS),
         _c('EXVIUS_ROTATION_HOUR', 'At', 'The hour of the change.', '22', HOURS),
         _c('EXVIUS_ROTATION_TZ', 'Time zone of the change', 'The clock the day and hour above are read on.', 'America/New_York', [(z, z.replace('_', ' ')) for z in ZONES]),
-        _t('EXVIUS_SUMMON_ROTATION', 'Rotate summons weekly', 'Off shows every banner at once.'),
+        _t('EXVIUS_SUMMON_ROTATION', 'Rotate summons weekly',
+           'Off shows every banner at once, over a thousand of them, and turns the history replay off as well: no summon pool, shop or '
+           'Vortex event is held back by date. Open the game twice after changing it.'),
         _t('EXVIUS_ROTATION_HOLIDAYS', 'Holiday summons at their holiday', 'Christmas, Halloween, Valentine\'s Day and Easter sets appear the week before and the week of the holiday.'),
         _n('EXVIUS_ROTATION_SPECIAL', 'Step-up, ticket and select sets per week', 'Only without the history replay.', 1, 0, 20),
         _n('EXVIUS_ROTATION_FEATURED', 'Other featured sets per week', 'Only without the history replay.', 2, 0, 20),
@@ -120,8 +126,13 @@ GROUPS = [
         _t('EXVIUS_STORY_UNITS', 'Story characters join when the story reaches them', 'As on Global: Fina after Lechios Hills, Lid after Galebreak, and so on.'),
         _t('EXVIUS_SUMMON_EXCLUSIONS', 'Keep story and reward units out of summons', 'Units Global never put in normal summons stay out of them.'),
         _t('EXVIUS_LIMITED_FEATURED_ONLY', 'Limited units only from their own banners', 'Collaboration and seasonal units come only from banners that feature them.'),
-        _t('EXVIUS_SELECT_LIMITED', 'Limited units in the 5★ Select Summon', 'Adds the limited and collaboration 5★ units Global had to the select list.'),
+        _t('EXVIUS_SELECT_LIMITED', 'Limited units in the 5-star Select Summon', 'Adds the limited and collaboration 5-star units Global had to the select list.'),
         _t('EXVIUS_SELL_STORY_UNITS', 'Story units can be sold', 'Extra copies sell for the usual price of their rarity.'),
+        _t('EXVIUS_LATE_BANNERS', 'Global\'s last year of banners',
+           'Adds Global\'s banners from September 2023 to the end of service, rebuilt from the wiki and Global\'s news, and puts '
+           'the cached banners of that period on their real dates. Off goes back to the old placeholder dates.'),
+        _t('EXVIUS_LATE_UNCONFIRMED', 'Also the unconfirmed 2024 step-ups',
+           'Adds 26 rebuilt 2024 NV Premium Step-Up summons whose existence is only inferred from the 2023 pattern.', '0'),
     ]),
     ('Other players and the Arena', 'Made-up players to befriend and fight, since nobody else is online.', [
         _n('EXVIUS_PLAYERS', 'Other players', 'How many exist. 0 turns them off.', 200, 0, 2000),

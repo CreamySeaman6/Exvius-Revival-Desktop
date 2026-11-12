@@ -1,4 +1,4 @@
-Exvius Revival Desktop 0.1.2 (public test release)
+Exvius Revival Desktop 0.1.3 (public test release)
 =================================================
 
 Runs FINAL FANTASY BRAVE EXVIUS 9.1.0 on a Windows PC, offline, against the same game server the
@@ -149,6 +149,16 @@ If something goes wrong
 - The game window opens and stays black: the APK was not the original game. The Exvius Offline
   app's APK has a changed game library that does not start here; this version says so when you
   choose it. Use "Use a different APK" in the start window with an original 9.1.0 APK.
+- The game closes at once and client\runner.log says "guest stopped: invalid memory write at 0x0"
+  after "[stub] first call: _Znwm": the APK is another version of the game (often an older one
+  labelled 9.1.0). Since 0.1.3 the start window says so instead. To check an APK, open it with
+  7-Zip: lib/arm64-v8a/libgame.so in the 9.1.0 APK is exactly 60,410,728 bytes.
+- Some summon banners show a plain blue picture with their name: their real picture is still being
+  downloaded by the server (it fetches them from a web archive after it starts, a few at a time;
+  logs\server.log has DEAL-ART lines). The real picture replaces it the next time you open the summon
+  screen after it has arrived.
+- The game restarts with a message when you open the Vortex: part of the game's data had not been
+  downloaded yet. Log in, accept the download, and open the Vortex again.
 - Your antivirus stops the game: runner.exe translates the game's code while it runs, which some
   antivirus programs find suspicious. Add this folder to its exceptions, and check that it did
   not move runner.exe, SDL2.dll or game.elf into quarantine (unpack the download again if so).

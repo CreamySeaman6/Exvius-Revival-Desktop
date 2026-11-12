@@ -35,6 +35,7 @@ The game itself is the Android version. The program takes the game library and a
 - **Windows 10 or 11, 64-bit**, on an Intel or AMD processor.
 - **Your Final Fantasy Brave Exvius 9.1.0 APK** (Android, Global version): the original game as it came from the app store. A single complete APK, or an `.xapk` / `.apks` bundle. It must contain the 64-bit ARM library.
   **The Exvius Offline app's APK does not work here.** Its game library is changed to run inside that app; this program recognises it and asks for the original instead.
+  **Other versions of the game do not work either**, including older ones that a download site labels 9.1.0. To check an APK, open it with 7-Zip: `lib/arm64-v8a/libgame.so` in the 9.1.0 APK is exactly **60,410,728 bytes**. The program checks this too and says so when you choose an APK that is not it.
 - **About 31 GB of free disk space** during setup, about 15 GB afterwards. The game data is 14.6 GB.
 - **A graphics driver with OpenGL 2.1 or newer**, which is any PC from the last ten years.
 

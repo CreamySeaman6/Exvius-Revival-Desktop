@@ -520,6 +520,8 @@ static Ret invoke(void *target_, JObj *m, va_list *ap, uint64_t *jv) {
     }
     if (!strcmp(m->name, "setSharedPrefString") && nobj >= 2 && objs[0] && objs[1]) {
         pref_set(objs[0]->utf, objs[1]->utf);
+        if (!strcmp(objs[0]->utf, "keymst_downloaded_flg"))
+            logf_("[setup] keymst_downloaded_flg = %s (%lu resource downloads so far)\n", objs[1]->utf, n_downloads);
         // First run only. The game decides at start-up, from the tables it already has, which packs to fetch before
         // the tutorial (its movie, the first battle's layouts). A new install has no tables at start-up, so it would
         // walk into the tutorial without them. Once the tables are in, restart the game once: the next start-up
