@@ -75,7 +75,7 @@ Exvius Revival Desktop.exe
 
 - **`runner.exe`** is an ARM64 machine in a Windows program: a JIT ([dynarmic](https://github.com/azahar-emu/dynarmic)) for the processor, the Linux system calls the game makes, its threads spread over a few host threads, OpenGL ES 2 passed on to desktop OpenGL, and SDL2 for the window, input and sound.
 - **`game.elf`** is a static 64-bit ARM Linux program. It loads the game library and supplies what the library expects from Android: the C library differences, JNI and the Java helpers the game calls, OpenSL ES sound, text drawing, HTTP.
-- **The server** is the Exvius Revival server engine, the same code the iOS edition runs in Docker, started by the launcher on a free local port with plain HTTP. It is built on the [Exvius Offline](https://github.com/Elvlin/exvius-offline) engine.
+- **The server** is the Exvius Revival server engine, the same code the iOS edition runs in Docker, started by the launcher on a free local port with plain HTTP.
 - **In-game web pages** (News notices, Drop Rates) are drawn by the server as pictures and shown by the runner in the place the game asks for them; no browser is embedded.
 - **The game reads the server's data where it is.** It does not download a second copy of the 14.6 GB.
 
@@ -116,7 +116,6 @@ The server is not in this repository. `pack.sh` copies it from a checkout of [Ex
 
 ## Credits
 
-- The game engine, the preserved game data and the original offline Android app are [Exvius Offline](https://github.com/Elvlin/exvius-offline) by Elvlin.
 - The server and the historical replay are from [Exvius Revival for iOS](https://github.com/CreamySeaman6/Exvius-revival-ios).
 - The runner uses [dynarmic](https://github.com/azahar-emu/dynarmic) (azahar-emu fork), [SDL2](https://libsdl.org) and [stb](https://github.com/nothings/stb). The full list with licences is in [`docs/LICENSES.txt`](docs/LICENSES.txt).
 - Exvius Revival Desktop is by rivbg.

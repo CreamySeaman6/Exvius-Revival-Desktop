@@ -5,7 +5,7 @@ edition of [Exvius Revival for iOS](https://github.com/CreamySeaman6/Exvius-revi
 historical replay, with the game and the server both running on your PC out of one folder.
 
 **The download contains no game.** You need your own FFBE 9.1.0 APK (Android, Global). The game data (14.6 GB) is
-downloaded during setup from the [Exvius Offline](https://github.com/Elvlin/exvius-offline) releases.
+downloaded during setup.
 
 ## Quick start
 

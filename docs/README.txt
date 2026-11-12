@@ -181,10 +181,8 @@ What is in this folder
 
 Credits
 -------
-The game engine, the preserved game data and the original offline Android app are Exvius Offline by
-Elvlin (https://github.com/Elvlin/exvius-offline). The server and its history replay are from
-Exvius Revival for iOS (https://github.com/CreamySeaman6/Exvius-revival-ios). Exvius Revival
-Desktop is by rivbg.
+The server and its history replay are from Exvius Revival for iOS
+(https://github.com/CreamySeaman6/Exvius-revival-ios). Exvius Revival Desktop is by rivbg.
 
 FINAL FANTASY BRAVE EXVIUS belongs to Square Enix and gumi. This is an unofficial fan project, not
 affiliated with either.
