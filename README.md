@@ -24,7 +24,7 @@ This is the desktop edition of [Exvius Revival for iOS](https://github.com/Cream
 
 The game itself is the Android version. The program takes the game library and assets out of **your own APK**, runs that library on the PC, and points it at a server on the same computer that only that computer can reach.
 
-> **This repository and its downloads contain no game files.** No game library, no assets, no game data, no APK. You supply the APK; the game data is downloaded during setup from the [Exvius Offline](https://github.com/Elvlin/exvius-offline) releases, exactly as the iOS edition does.
+> **This repository and its downloads contain no game files.** No game library, no assets, no game data, no APK. You supply the APK; the game data is downloaded during setup from the data releases, exactly as the iOS edition does.
 
 > **Status: first public test release.** It has been played on a real Windows PC and tested automatically on Linux and under Wine, but it is new. [Known issues](#known-issues) lists what does not work yet.
 
@@ -116,7 +116,7 @@ The server is not in this repository. `pack.sh` copies it from a checkout of [Ex
 
 ## Credits
 
-- The game engine, the preserved game data and the original offline Android app are [Exvius Offline](https://github.com/Elvlin/exvius-offline) by Elvlin. The game data is downloaded from that project's releases during setup.
+- The game engine, the preserved game data and the original offline Android app are [Exvius Offline](https://github.com/Elvlin/exvius-offline) by Elvlin.
 - The server and the historical replay are from [Exvius Revival for iOS](https://github.com/CreamySeaman6/Exvius-revival-ios).
 - The runner uses [dynarmic](https://github.com/azahar-emu/dynarmic) (azahar-emu fork), [SDL2](https://libsdl.org) and [stb](https://github.com/nothings/stb). The full list with licences is in [`docs/LICENSES.txt`](docs/LICENSES.txt).
 - Exvius Revival Desktop is by rivbg.
