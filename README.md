@@ -2,6 +2,24 @@
 
 Play **Final Fantasy Brave Exvius** (Global, version 9.1.0) again on a **Windows PC**, offline, in a window of its own.
 
+## Already playing? How to update
+
+Your save, your settings and the 14.6 GB of game data stay where they are. You do not choose the APK or download the data again.
+
+1. **Close the game and the start window.**
+2. Go to [Releases](../../releases) and download the newest `ExviusRevivalDesktop-win64-<version>.zip`.
+3. Right-click the downloaded zip and choose **Extract All**. This gives you a new folder called `ExviusRevivalDesktop`.
+4. Open that new folder. Press **Ctrl+A** to select everything in it, then **Ctrl+C** to copy.
+5. Open the folder you already play from (the one with **Exvius Revival Desktop.exe**, `save` and `data` in it). Press **Ctrl+V** to paste.
+6. Windows asks what to do with files that have the same name. Choose **Replace the files in the destination**.
+7. Double-click **Exvius Revival Desktop.exe** and click **Play**, as always.
+
+You can delete the downloaded zip and the new folder afterwards. If you want to be extra safe, make a copy of your `save` folder before step 5.
+
+New here? Start at [Quick start](#quick-start).
+
+---
+
 This is the desktop edition of [Exvius Revival for iOS](https://github.com/CreamySeaman6/Exvius-revival-ios). It runs the same game server, with the same historical replay of Global's summons, events and shops, and the same settings. The difference is where the game runs: instead of an iPhone talking to a server in Docker over Tailscale, the server and the game both run on your PC, out of one folder. There is no Docker, no Tailscale, no certificate to trust and no account to make.
 
 The game itself is the Android version. The program takes the game library and assets out of **your own APK**, runs that library on the PC, and points it at a server on the same computer that only that computer can reach.
