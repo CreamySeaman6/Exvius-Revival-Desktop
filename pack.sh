@@ -37,7 +37,8 @@ for w in "$WHL"/*.whl; do unzip -q -o "$w" -d "$OUT/python/Lib/site-packages"; d
 mkdir -p "$OUT/server/engine"
 (cd "$DEV/source/server" && tar --exclude='__pycache__' -cf - .) | tar -xf - -C "$OUT/server/engine"
 cp "$DEV/ios-server/serve.py" "$DEV/ios-server/fetch_data.py" "$DEV/ios-server/docker-compose.yml" "$OUT/server/"
-cp "$DEV/data/latest.json" "$OUT/server/latest.json"
+# MANIFEST=<file> packs another download list than the one in the server repository
+cp "${MANIFEST:-$DEV/data/latest.json}" "$OUT/server/latest.json"
 # The full list of server settings: the server's own README (at the top of the public repository)
 if [ -f "$DEV/ios-server/README.md" ]; then cp "$DEV/ios-server/README.md" "$OUT/server/README.md"; else cp "$DEV/README.md" "$OUT/server/README.md"; fi
 git -C "$DEV" log -1 --format='%H %cd' > "$OUT/server/REVISION.txt"

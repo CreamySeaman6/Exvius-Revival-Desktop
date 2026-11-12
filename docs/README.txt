@@ -1,4 +1,4 @@
-Exvius Revival Desktop 0.1.1 (public test release)
+Exvius Revival Desktop 0.1.2 (public test release)
 =================================================
 
 Runs FINAL FANTASY BRAVE EXVIUS 9.1.0 on a Windows PC, offline, against the same game server the
@@ -182,9 +182,9 @@ What is in this folder
 Credits
 -------
 The game engine, the preserved game data and the original offline Android app are Exvius Offline by
-Elvlin (https://github.com/Elvlin/exvius-offline). The game data is downloaded from that project's
-releases. The server and its history replay are from Exvius Revival for iOS
-(https://github.com/CreamySeaman6/Exvius-revival-ios). Exvius Revival Desktop is by rivbg.
+Elvlin (https://github.com/Elvlin/exvius-offline). The server and its history replay are from
+Exvius Revival for iOS (https://github.com/CreamySeaman6/Exvius-revival-ios). Exvius Revival
+Desktop is by rivbg.
 
 FINAL FANTASY BRAVE EXVIUS belongs to Square Enix and gumi. This is an unofficial fan project, not
 affiliated with either.
