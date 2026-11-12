@@ -156,6 +156,8 @@ def main() -> int:
     args = parser.parse_args()
     sys.path.insert(0, str(SERVER))
     sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import net_trust
+    trust = net_trust.apply()                       # the server fetches banner art from the internet too
     import serve
 
     serve.configure_engine()
@@ -182,6 +184,7 @@ def main() -> int:
     handler = with_pages(serve.make_handler(capture_server, b'', b''), args.port)
     server = serve.Server(('127.0.0.1', args.port), handler)
     threading.Thread(target=server.serve_forever, name=f'HTTP-{args.port}', daemon=True).start()
+    serve.log(f'https checks for downloads: {trust}')
     serve.log(f'HTTP listening on 127.0.0.1:{args.port} (this computer only)')
     serve.prune_request_logs()
     serve.log('ready')

@@ -1,5 +1,5 @@
-Exvius Revival Desktop 0.1.0 (first public test release)
-========================================================
+Exvius Revival Desktop 0.1.1 (public test release)
+=================================================
 
 Runs FINAL FANTASY BRAVE EXVIUS 9.1.0 on a Windows PC, offline, against the same game server the
 iPhone release (Exvius Revival for iOS) uses. The server runs on this computer and only this
@@ -144,7 +144,17 @@ start goes through the short first-run prompts again and then continues with you
 
 If something goes wrong
 -----------------------
-- "The game stopped unexpectedly": the details are in client\runner.log.
+- "The game stopped unexpectedly", or Windows says runner.exe has stopped working: the details
+  are in client\runner.log.
+- The game window opens and stays black: the APK was not the original game. The Exvius Offline
+  app's APK has a changed game library that does not start here; this version says so when you
+  choose it. Use "Use a different APK" in the start window with an original 9.1.0 APK.
+- Your antivirus stops the game: runner.exe translates the game's code while it runs, which some
+  antivirus programs find suspicious. Add this folder to its exceptions, and check that it did
+  not move runner.exe, SDL2.dll or game.elf into quarantine (unpack the download again if so).
+- "Download game data" fails at once although the internet works: this version checks the
+  download servers' certificates the way your browser does, which was the usual cause. If it
+  still fails, antivirus "HTTPS scanning" is the next thing to switch off for a moment.
 - Clicks or scrolling in the game misbehave: in Settings, Other settings, add the line
   FFBE_TOUCH_LOG=1 and play again. client\runner.log then lists every touch the game was given,
   which is what is needed to see what went wrong.

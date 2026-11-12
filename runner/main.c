@@ -885,6 +885,8 @@ static GThread *pick(int core) {
 // place it was at is counted; each 5-second report then names the busiest places. This is how to find out what a
 // loading stall is spent on.
 static int g_profile;
+static int g_keepalive = 1;                  // FFBE_NO_KEEPALIVE=1 turns the reading of events during stalls off (for comparison)
+static volatile int keepalive_due;
 #define MAXPROF 4096
 static struct { uint64_t pc, lr; unsigned n; } prof[MAXPROF];
 static unsigned prof_total;
@@ -947,6 +949,9 @@ static void core_loop(int core) {
         // Run this thread until it blocks, exits, or its turn ends.
         for (;;) {
             int why = cpu_run();
+            // Core 0 is the thread that owns the window. If the game has not asked for the window's events for a
+            // while (it is busy loading), read them here so that Windows does not take the window for dead.
+            if (core == 0 && keepalive_due) { keepalive_due = 0; video_keepalive(); if (why == CPU_SLICE && !g_quit && !want_switch) continue; }
             if (why == CPU_SVC) { if (handle_svc()) continue; break; }
             if (g_profile && why == CPU_SLICE && t == main_thread) { prof_add(cpu_pc(), cpu_x(30)); if (!g_quit) continue; }
             if (why == CPU_FAULT) { SDL_LockMutex(big); report_crash(cpu_fault_text()); g_quit = 1; g_exit_code = 70; SDL_UnlockMutex(big); }
@@ -986,11 +991,12 @@ static int ticker(void *ud) {
             if (now - slice_start[c] >= 3000000ULL || (waiting_urgent > idle && !t->urgent)) cpu_request_stop(c);
         }
         if (g_profile && n_cores > 1 && last_present_ns && now - last_present_ns > 60000000ULL) cpu_request_stop(0);
+        if (g_keepalive && video_quiet_ns() > 150000000ULL) { keepalive_due = 1; cpu_request_stop(0); }
         if (g_verbose && last_present_ns && now - last_present_ns > 4000000000ULL && now - last_report > 5000000000ULL) dump_threads();
         if (g_verbose && now - last_report > 5000000000ULL) {
             last_report = now;
-            rlog("[runner] 5 s: %lu frames, %lu late, longest %.0f ms; %d sound gaps, least in hand %d ms; %lu system calls, %lu host calls, %lu thread switches\n",
-                 n_frames, n_late, worst_gap / 1e6, audio_gaps(), audio_low_ms(), n_syscalls, n_hypercalls, n_switches);
+            rlog("[runner] 5 s: %lu frames, %lu late, longest %.0f ms; %d sound gaps, least in hand %d ms; %lu system calls, %lu host calls, %lu thread switches; window unread for at most %d ms\n",
+                 n_frames, n_late, worst_gap / 1e6, audio_gaps(), audio_low_ms(), n_syscalls, n_hypercalls, n_switches, video_longest_quiet_ms());
             n_syscalls = n_hypercalls = n_switches = n_frames = n_late = 0; worst_gap = 0;
             if (g_profile) prof_report();
         }
@@ -1014,8 +1020,10 @@ int main(int argc, char **argv) {
     g_logf = os_fopen(logpath, "w");
     if (getenv("FFBE_VERBOSE")) g_verbose = atoi(getenv("FFBE_VERBOSE"));
     if (getenv("FFBE_PROFILE")) { g_profile = 1; if (!g_verbose) g_verbose = 1; }
+    if (getenv("FFBE_NO_KEEPALIVE")) g_keepalive = 0;
     os_files_init();
     os_tune_process();
+    if (getenv("FFBE_TEST_CRASH")) { volatile int *nowhere = NULL; *nowhere = 1; }      // for tests: the runner itself crashes
     overlay_init();
     audio_load_settings();
     if (getenv("FFBE_SERVER")) snprintf(g_server, sizeof g_server, "%s", getenv("FFBE_SERVER"));

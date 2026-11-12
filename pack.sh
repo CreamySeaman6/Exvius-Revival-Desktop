@@ -25,7 +25,14 @@ rm -rf "$OUT/python/include" "$OUT/python/libs" "$OUT/python/Scripts" "$OUT/pyth
        "$OUT/python/Lib/turtledemo" "$OUT/python/tcl/tk8.6/demos"
 find "$OUT/python" -name '__pycache__' -type d -prune -exec rm -rf {} +
 mkdir -p "$OUT/python/Lib/site-packages"
+# The launcher's own two libraries (app/net_trust.py: certificate checks for downloads). Both are plain Python.
+# Without them the package still runs, but downloads fail on PCs whose Windows lacks the server's root certificate.
+for lib in truststore certifi; do
+  ls "$WHL"/$lib-*.whl >/dev/null 2>&1 || python3 -m pip download -q --no-deps --only-binary=:all: -d "$WHL" $lib \
+    || { echo "pack.sh: $lib is not in $WHL and could not be fetched (pip download $lib)"; exit 1; }
+done
 for w in "$WHL"/*.whl; do unzip -q -o "$w" -d "$OUT/python/Lib/site-packages"; done
+[ -d "$OUT/python/Lib/site-packages/truststore" ] && [ -d "$OUT/python/Lib/site-packages/certifi" ] || { echo "pack.sh: truststore or certifi did not get into the package"; exit 1; }
 # Server: the engine and start-up code of the iPhone release
 mkdir -p "$OUT/server/engine"
 (cd "$DEV/source/server" && tar --exclude='__pycache__' -cf - .) | tar -xf - -C "$OUT/server/engine"

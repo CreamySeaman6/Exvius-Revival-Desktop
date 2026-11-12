@@ -53,6 +53,12 @@ GAME_VERSION = '9.1.0'
 LIBRARY_ENTRY = 'lib/arm64-v8a/libgame.so'
 # SHA-256 of libgame.so from the 9.1.0 APK this program was built and tested with.
 KNOWN_LIBRARIES = {'01d2aa87a9ce893b071a044a048af179eac3caae0147065e8ca398e1adb7d051': '9.1.0'}
+# The Exvius Offline Android app's APK carries a game library changed to work inside that app (it registers the
+# app's own rules class). It does not start here: the window stays black. It is recognised by that class's name.
+MODIFIED_MARK = b'com/exvius/local/NativeRules'
+MODIFIED_TEXT = ('This APK is the Exvius Offline Android app. Its game library was changed to work inside that app and '
+                 'does not start here (the game window stays black). Exvius Revival Desktop needs the original '
+                 f'FINAL FANTASY BRAVE EXVIUS {GAME_VERSION} APK, Global version: the game as it came from the app store.')
 NO_WINDOW = 0x08000000 if WINDOWS else 0   # CREATE_NO_WINDOW
 RESTART_CODE = 75                           # runner exit code: start the game again
 
@@ -118,6 +124,7 @@ def install_apk(path: Path, report=lambda text, done, total: None) -> dict:
     (staging / 'assets').mkdir(parents=True)
     digest = hashlib.sha256()
     report('Copying the game library', done, total)
+    modified, tail = False, b''
     with library.open(LIBRARY_ENTRY) as source, open(staging / 'libgame.so', 'wb') as out:
         while True:
             block = source.read(4 << 20)
@@ -125,9 +132,14 @@ def install_apk(path: Path, report=lambda text, done, total: None) -> dict:
                 break
             out.write(block)
             digest.update(block)
+            modified = modified or MODIFIED_MARK in tail + block
+            tail = block[-len(MODIFIED_MARK):]
             done += len(block)
             report('Copying the game library', done, total)
     library_hash = digest.hexdigest()
+    if modified:
+        shutil.rmtree(staging, ignore_errors=True)
+        raise SetupError(MODIFIED_TEXT)
     for package, info in entries:
         target = staging / info.filename
         target.parent.mkdir(parents=True, exist_ok=True)
@@ -155,27 +167,15 @@ def install_apk(path: Path, report=lambda text, done, total: None) -> dict:
 # Step 2: the server's game data
 # ----------------------------------------------------------------------------------------------------
 def _use_system_certificates() -> None:
-    """Verify HTTPS the way the browsers on this computer do.
+    """Verify HTTPS the way the browsers on this computer do; see net_trust.py. Without this the game-data download
+    failed with CERTIFICATE_VERIFY_FAILED on PCs whose Windows had not fetched the download server's root yet."""
+    import net_trust
+    if not _use_system_certificates.told:
+        _use_system_certificates.told = True
+        log_error('https checks: ' + net_trust.apply())
 
-    The bundled Python only trusts the root certificates already sitting in the Windows store. Windows itself fetches
-    missing roots on demand (so a fresh PC may not have the one GitHub's download servers chain to yet), and
-    antivirus HTTPS scanning or a network filter adds its own trusted root that the browsers accept. Either way the
-    game-data download failed with CERTIFICATE_VERIFY_FAILED. truststore hands verification to Windows' own
-    certificate checks; if it is missing, the certifi bundle is used instead. Certificates are verified either way.
-    """
-    try:
-        import truststore
-        truststore.inject_into_ssl()
-        return
-    except Exception:
-        pass
-    try:
-        import ssl
-        import certifi
-        context = ssl.create_default_context(cafile=certifi.where())
-        urllib.request.install_opener(urllib.request.build_opener(urllib.request.HTTPSHandler(context=context)))
-    except Exception:
-        pass
+
+_use_system_certificates.told = False
 
 
 def _fetcher():
@@ -207,10 +207,22 @@ def data_status() -> tuple[bool, float]:
 
 def fetch_game_data(report=lambda line: None) -> None:
     fetch_data = _fetcher()
-    fetch_data.log = lambda message: report(message.replace('Start the server with:  docker compose up -d', '').strip())
+    seen = {'certificate': False}
+
+    def log(message: str) -> None:
+        if 'CERTIFICATE_VERIFY_FAILED' in message:
+            seen['certificate'] = True
+        if 'interrupted' in message or 'could not' in message:
+            log_error('download: ' + message.strip())           # the reason, for logs/launcher.log
+        report(message.replace('Start the server with:  docker compose up -d', '').strip())
+    fetch_data.log = log
     try:
         result = fetch_data.main([])
     except SystemExit as exc:           # fetch_data reports its own failures this way
+        if seen['certificate']:
+            raise SetupError('The download server\'s certificate could not be checked on this computer, so nothing was '
+                             'downloaded. This usually comes from antivirus "HTTPS scanning" or a network filter. Try again '
+                             'with that switched off for a moment, or on another network. The details are in logs\\launcher.log.') from exc
         raise SetupError(str(exc.code) if exc.code not in (None, 0) else 'The data download stopped.') from exc
     except OSError as exc:
         raise SetupError(f'The data download failed: {exc}') from exc
@@ -357,7 +369,38 @@ def start_game(port: int, extra_environment: dict | None = None) -> subprocess.P
                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=NO_WINDOW)
 
 
+def library_is_modified() -> bool:
+    """Is the installed game library the Exvius Offline app's (installed by an earlier version of this program)?
+    Looked up once and kept in client/installed.json."""
+    record_path = CLIENT / 'installed.json'
+    try:
+        record = json.loads(record_path.read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        return False
+    if record.get('known_version'):
+        return False
+    if 'modified' not in record:
+        found, tail = False, b''
+        try:
+            with open(GAME / 'libgame.so', 'rb') as source:
+                for block in iter(lambda: source.read(4 << 20), b''):
+                    if MODIFIED_MARK in tail + block:
+                        found = True
+                        break
+                    tail = block[-len(MODIFIED_MARK):]
+        except OSError:
+            return False
+        record['modified'] = found
+        try:
+            record_path.write_text(json.dumps(record, indent=1), encoding='utf-8')
+        except OSError:
+            pass
+    return bool(record['modified'])
+
+
 def play(extra_environment: dict | None = None, on_started=lambda: None) -> int:
+    if library_is_modified():
+        raise SetupError(MODIFIED_TEXT + ' Choose "Use a different APK" in the start window.')
     server, port = start_server()
     try:
         while True:

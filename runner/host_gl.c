@@ -235,6 +235,7 @@ static void set_icon(void) {
     fclose(f);
 }
 
+static uint64_t pumped_ns, longest_quiet_ns;     // see "staying alive while the game is busy" below
 void video_init(int w, int h, const char *title) {
     if (win) return;
     ui_own_frame = !cfg_int("system_frame", 0) && !getenv("FFBE_SYSTEM_FRAME");
@@ -245,6 +246,9 @@ void video_init(int w, int h, const char *title) {
     SDL_SetHint(SDL_HINT_MOUSE_FOCUS_CLICKTHROUGH, "1");            // the click that brings the window forward is a click in the game too
 #endif
     if (SDL_InitSubSystem(SDL_INIT_VIDEO) != 0) fatal("cannot open a window: %s", SDL_GetError());
+#ifdef _WIN32
+    DisableProcessWindowsGhosting();                                // never the faded "Not Responding" stand-in for this window
+#endif
     // The game's picture: FFBE_WINDOW=WxH if given (tests), else as large as the "large" window on this screen, so the
     // picture is exact at that size and only ever scaled a little.
     const char *ws = getenv("FFBE_WINDOW"), *rs = getenv("FFBE_RENDER");
@@ -266,6 +270,7 @@ void video_init(int w, int h, const char *title) {
     SDL_GL_SetAttribute(SDL_GL_STENCIL_SIZE, 0);
     win = SDL_CreateWindow(title, SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED, vw, vh + bar_px(vw),
                            SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | (ui_own_frame ? SDL_WINDOW_BORDERLESS : 0));
+    pumped_ns = now_ns();                                           // the clock for "events unread" starts with the window
     if (!win) fatal("cannot open a window: %s", SDL_GetError());
     if (ui_own_frame && SDL_SetWindowHitTest(win, hit_test, NULL) != 0) rlog("[video] the bar cannot move the window here: %s\n", SDL_GetError());
     set_icon();
@@ -769,9 +774,26 @@ static int poll_one(struct HcEvent *ev) {
     }
     return 0;
 }
+// ---- staying alive while the game is busy ---------------------------------------------------------------
+// The window's events are read when the game asks for them, once a frame. While the game's main thread is busy
+// for seconds at a time (starting up, logging in, reading its tables) it does not ask, and Windows then calls
+// the window "Not Responding" and fades it: to the player the game has frozen, although it is only loading. So
+// the scheduler has the events read (not acted on: they wait in SDL's queue for the game) whenever the game has
+// not asked for a while. video_keepalive must be called on the thread that owns the window.
+static uint64_t pumped_ns, longest_quiet_ns;
+uint64_t video_quiet_ns(void) { return win && pumped_ns ? now_ns() - pumped_ns : 0; }
+static void pumped(void) {
+    uint64_t now = now_ns();
+    if (pumped_ns && now - pumped_ns > longest_quiet_ns) longest_quiet_ns = now - pumped_ns;
+    pumped_ns = now;
+}
+void video_keepalive(void) { if (!win) return; SDL_PumpEvents(); pumped(); }
+int video_longest_quiet_ms(void) { int ms = (int)(longest_quiet_ns / 1000000ULL); longest_quiet_ns = 0; return ms; }
+
 int video_poll(struct HcEvent *ev) {
     static int tell = -1;
     if (tell < 0) tell = getenv("FFBE_TOUCH_LOG") != NULL;         // diagnosis: every touch the game is given, with its frame
+    pumped();
     int got = poll_one(ev);
     if (tell && got && (ev->type == HEV_TOUCH_DOWN || ev->type == HEV_TOUCH_UP || ev->type == HEV_TOUCH_MOVE))
         rlog("[touch] %s %.0f %.0f frame %lu\n", ev->type == HEV_TOUCH_DOWN ? "down" : ev->type == HEV_TOUCH_UP ? "up" : "move", ev->x, ev->y, frame_no);

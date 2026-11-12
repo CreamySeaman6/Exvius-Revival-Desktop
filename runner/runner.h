@@ -72,6 +72,9 @@ int video_poll(struct HcEvent *ev);
 void video_size(int *w, int *h);
 uint64_t gl_call(int index, const uint64_t *x, uint64_t sp);
 void video_shutdown(void);
+uint64_t video_quiet_ns(void);                // how long the window's events have gone unread (0 without a window)
+void video_keepalive(void);                   // read them (the window's own thread only); they wait for the game
+int video_longest_quiet_ms(void);             // the longest such stretch since last asked
 int video_paced(void);                        // 1 while frames are timed by the display (vertical sync) instead of the game's own clock
 
 // host_audio.c

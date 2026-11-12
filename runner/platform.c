@@ -94,8 +94,26 @@ int64_t os_pwrite(int h, const void *buf, size_t n, int64_t off) {
     LeaveCriticalSection(l);
     return r;
 }
+// A crash of the runner itself (not of the game, which is reported with its own stack): Windows only shows
+// "runner.exe has stopped working". Leave what it was and where in runner.log, so that a report can be read.
+static LONG WINAPI own_crash(EXCEPTION_POINTERS *x) {
+    static LONG once;
+    if (InterlockedExchange(&once, 1)) return EXCEPTION_CONTINUE_SEARCH;
+    uintptr_t at = (uintptr_t)x->ExceptionRecord->ExceptionAddress, base = (uintptr_t)GetModuleHandleW(NULL);
+    HMODULE in = NULL; char name[MAX_PATH] = "?";
+    if (GetModuleHandleExA(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS | GET_MODULE_HANDLE_EX_FLAG_UNCHANGED_REFCOUNT, (LPCSTR)at, &in) && in)
+        GetModuleFileNameA(in, name, sizeof name);
+    const char *leaf = strrchr(name, '\\'); leaf = leaf ? leaf + 1 : name;
+    rlog("[runner] the runner itself stopped: exception 0x%08lx at %p (%s+0x%llx; runner.exe is at %p)",
+         (unsigned long)x->ExceptionRecord->ExceptionCode, (void *)at, leaf, (unsigned long long)(in ? at - (uintptr_t)in : 0), (void *)base);
+    if (x->ExceptionRecord->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && x->ExceptionRecord->NumberParameters >= 2)
+        rlog(", %s address %p", x->ExceptionRecord->ExceptionInformation[0] ? "writing" : "reading", (void *)x->ExceptionRecord->ExceptionInformation[1]);
+    rlog("\n[runner] 0xc000001d means this processor lacks an instruction the program uses; 0xc0000005 is a bad memory access\n");
+    return EXCEPTION_CONTINUE_SEARCH;
+}
 // A game should not be slowed because another window is in front or the PC is saving power.
 void os_tune_process(void) {
+    SetUnhandledExceptionFilter(own_crash);
     SetPriorityClass(GetCurrentProcess(), ABOVE_NORMAL_PRIORITY_CLASS);
     typedef struct { ULONG Version, ControlMask, StateMask; } Throttling;
     BOOL (WINAPI *set_info)(HANDLE, int, LPVOID, DWORD) = (void *)GetProcAddress(GetModuleHandleW(L"kernel32.dll"), "SetProcessInformation");

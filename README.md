@@ -15,7 +15,8 @@ The game itself is the Android version. The program takes the game library and a
 ## What you need
 
 - **Windows 10 or 11, 64-bit**, on an Intel or AMD processor.
-- **Your Final Fantasy Brave Exvius 9.1.0 APK** (Android, Global version). A single complete APK, or an `.xapk` / `.apks` bundle. It must contain the 64-bit ARM library.
+- **Your Final Fantasy Brave Exvius 9.1.0 APK** (Android, Global version): the original game as it came from the app store. A single complete APK, or an `.xapk` / `.apks` bundle. It must contain the 64-bit ARM library.
+  **The Exvius Offline app's APK does not work here.** Its game library is changed to run inside that app; this program recognises it and asks for the original instead.
 - **About 31 GB of free disk space** during setup, about 15 GB afterwards. The game data is 14.6 GB.
 - **A graphics driver with OpenGL 2.1 or newer**, which is any PC from the last ten years.
 
@@ -66,6 +67,8 @@ Exvius Revival Desktop.exe
 - **Loading pauses.** Logging in, and now and then entering a screen, pauses for a few seconds while the game reads its tables. That is the game's own loading, running through the JIT.
 - **Windows only for now.** The runner also builds for Linux (that is how most of it is tested), but there is no Linux package.
 - **Unsigned.** Windows SmartScreen and some antivirus programs warn about new unsigned programs.
+
+- **Antivirus.** `runner.exe` translates the game's ARM code into PC code while it runs, which some antivirus programs take for suspicious behaviour and stop. If the game closes right after starting, add the program's folder to your antivirus's exceptions and check that it did not move `runner.exe`, `SDL2.dll` or `game.elf` into quarantine.
 
 If something goes wrong, the logs are in the program's folder: `client\runner.log` (the game), `logs\server.log` (the server), `logs\launcher.log` and `logs\launcher-fatal.log` (the start window).
 
