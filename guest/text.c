@@ -15,21 +15,54 @@
 #include "shared.h"
 #include "text.h"
 
-static stbtt_fontinfo font;
-static int font_ok = -1;
+// Two fonts: the one the text is set in (Roboto, as on Android), and a second one for the characters it lacks.
+// A phone's system fills those in from its other fonts; here that is /ffbe/font2.ttf (DejaVu Sans), which has
+// the stars of "5★" and the other symbols the game's and the server's texts use. Without it they were empty boxes.
+static stbtt_fontinfo font, font2;
+static int font_ok = -1, font2_ok;
+static float font2_ratio = 1;                   // font2's units to the first font's, so both come out the same size
 
-static void load_font(void) {
-    if (font_ok >= 0) return;
-    font_ok = 0;
-    const char *path = getenv("FFBE_FONT") ? getenv("FFBE_FONT") : "/ffbe/font.ttf";
+static int open_font(const char *path, stbtt_fontinfo *into) {
     FILE *f = fopen(path, "rb");
-    if (!f) { logf_("[text] no font at %s; labels drawn by the system font will be blank\n", path); return; }
+    if (!f) return 0;
     fseek(f, 0, SEEK_END); long n = ftell(f); fseek(f, 0, SEEK_SET);
     unsigned char *data = malloc((size_t)n);
-    if (fread(data, 1, (size_t)n, f) == (size_t)n && stbtt_InitFont(&font, data, stbtt_GetFontOffsetForIndex(data, 0))) font_ok = 1;
+    int ok = fread(data, 1, (size_t)n, f) == (size_t)n && stbtt_InitFont(into, data, stbtt_GetFontOffsetForIndex(data, 0));
     fclose(f);
+    if (!ok) free(data);
+    return ok;
 }
-static int utf8(const char **p, const char *end) {
+static void load_font(void) {
+    if (font_ok >= 0) return;
+    const char *path = getenv("FFBE_FONT") ? getenv("FFBE_FONT") : "/ffbe/font.ttf";
+    font_ok = open_font(path, &font);
+    if (!font_ok) { logf_("[text] no font at %s; labels drawn by the system font will be blank\n", path); return; }
+    font2_ok = open_font("/ffbe/font2.ttf", &font2);
+    if (font2_ok) font2_ratio = stbtt_ScaleForMappingEmToPixels(&font2, 1000) / stbtt_ScaleForMappingEmToPixels(&font, 1000);
+    else logf_("[text] no second font at /ffbe/font2.ttf: characters the first one lacks (stars, some symbols) show as boxes\n");
+}
+// The font a character is drawn from, and the scale to use with it.
+static const stbtt_fontinfo *face(int cp, float *scale) {
+    if (cp < 0x250 || !font2_ok || stbtt_FindGlyphIndex(&font, cp) || !stbtt_FindGlyphIndex(&font2, cp)) return &font;
+    *scale *= font2_ratio;
+    return &font2;
+}
+// A character neither font has, as the plain one it is the wide form of: the game writes "until" in front of a
+// date as a full-width tilde. What still has no shape is named in the log once, so a box on the screen can be
+// traced to its character.
+static int plain(int cp) {
+    static int seen[24], nseen;
+    if (cp < 0x250 || font_ok <= 0) return cp;
+    if (stbtt_FindGlyphIndex(&font, cp) || (font2_ok && stbtt_FindGlyphIndex(&font2, cp))) return cp;
+    if (cp >= 0xFF01 && cp <= 0xFF5E) return cp - 0xFEE0;       // full-width forms of ! to ~
+    if (cp == 0x301C) return '~';                               // wave dash
+    if (cp == 0x3000) return ' ';                               // wide space
+    if ((cp >= 0xFE00 && cp <= 0xFE0F) || cp == 0x200B || cp == 0xFEFF) return cp;        // nothing to draw
+    for (int i = 0; i < nseen; i++) if (seen[i] == cp) return cp;
+    if (nseen < 24) { seen[nseen++] = cp; logf_("[text] no font has U+%04X; it shows as a box\n", cp); }
+    return cp;
+}
+static int utf8_raw(const char **p, const char *end) {
     const unsigned char *s = (const unsigned char *)*p;
     int c = *s, n = c < 0x80 ? 1 : c < 0xE0 ? 2 : c < 0xF0 ? 3 : 4;
     if ((const char *)s + n > end) n = 1;
@@ -39,13 +72,16 @@ static int utf8(const char **p, const char *end) {
     *p += n;
     return c;
 }
+static int utf8(const char **p, const char *end) { return plain(utf8_raw(p, end)); }
 typedef struct { int start, end; float width; } Line;     // indices into the codepoint array
 
 static float advance(int cp, int next, float scale) {
     int adv, lsb;
-    stbtt_GetCodepointHMetrics(&font, cp, &adv, &lsb);
-    float a = adv * scale;
-    if (next) a += stbtt_GetCodepointKernAdvance(&font, cp, next) * scale;
+    float own = scale;
+    const stbtt_fontinfo *f = face(cp, &own);
+    stbtt_GetCodepointHMetrics(f, cp, &adv, &lsb);
+    float a = adv * own;
+    if (next && f == &font) a += stbtt_GetCodepointKernAdvance(&font, cp, next) * scale;
     return a;
 }
 static float span_width(const int *cps, int a, int b, float scale) {
@@ -81,12 +117,13 @@ static int break_lines(const int *cps, int n, float scale, float max_width, Line
 static void draw_run(unsigned char *cov, int w, int h, const int *cps, int a, int b, float scale, float x, float baseline) {
     for (int i = a; i < b; i++) {
         int x0, y0, x1, y1;
-        float fx = x - floorf(x);
-        stbtt_GetCodepointBitmapBoxSubpixel(&font, cps[i], scale, scale, fx, 0, &x0, &y0, &x1, &y1);
+        float fx = x - floorf(x), own = scale;
+        const stbtt_fontinfo *f = face(cps[i], &own);
+        stbtt_GetCodepointBitmapBoxSubpixel(f, cps[i], own, own, fx, 0, &x0, &y0, &x1, &y1);
         int gw = x1 - x0, gh = y1 - y0;
         if (gw > 0 && gh > 0) {
             unsigned char *g = calloc((size_t)gw, (size_t)gh);
-            stbtt_MakeCodepointBitmapSubpixel(&font, g, gw, gh, gw, scale, scale, fx, 0, cps[i]);
+            stbtt_MakeCodepointBitmapSubpixel(f, g, gw, gh, gw, own, own, fx, 0, cps[i]);
             int ox = (int)floorf(x) + x0, oy = (int)lroundf(baseline) + y0;
             for (int yy = 0; yy < gh; yy++) {
                 int py = oy + yy;
@@ -115,7 +152,9 @@ void text_measure(const char *s, int len, int size, float *w, float *h) {
     int top = 0, bottom = 0;
     for (int i = 0; i < n; i++) {
         int x0, y0, x1, y1;
-        stbtt_GetCodepointBitmapBox(&font, cps[i], scale, scale, &x0, &y0, &x1, &y1);
+        float own = scale;
+        const stbtt_fontinfo *f = face(cps[i], &own);
+        stbtt_GetCodepointBitmapBox(f, cps[i], own, own, &x0, &y0, &x1, &y1);
         if (y0 < top) top = y0;
         if (y1 > bottom) bottom = y1;
     }

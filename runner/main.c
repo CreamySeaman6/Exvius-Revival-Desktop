@@ -322,10 +322,32 @@ static int extra_thread(void *ud) {
     SDL_AtomicSet(&extra_ready, 1);
     return 0;
 }
+// The same file but for the number in its name ("en/sd/area/Ver1654_spdungeon1.cpk" and ".../Ver1989_spdungeon1.cpk").
+static int same_but_version(const char *a, const char *b) {
+    const char *sa = strrchr(a, '/'), *sb = strrchr(b, '/');
+    sa = sa ? sa + 1 : a; sb = sb ? sb + 1 : b;
+    if (sa - a != sb - b || strncmp(a, b, (size_t)(sa - a)) || strncmp(sa, "Ver", 3) || strncmp(sb, "Ver", 3)) return 0;
+    sa += 3; sb += 3;
+    if (*sa < '0' || *sa > '9' || *sb < '0' || *sb > '9') return 0;
+    while (*sa >= '0' && *sa <= '9') sa++;
+    while (*sb >= '0' && *sb <= '9') sb++;
+    return *sa == '_' && !strcmp(sa, sb);
+}
+// The game asks for such a file under the version its tables give it. After an update of the server or its data
+// the pack has a new version, but at the first log-in the game still goes by the tables it has, finds the old
+// name missing, tries to download it, gets a 404 and reports "A connection error has occurred". So a file the
+// server offers is shown under whatever version the game asks for; the next tables name the new one.
 static int extra_of(const char *rel, char *out, size_t cap) {
     if (!strstr(rel, ".cpk")) return 0;
     for (int waited = 0; !SDL_AtomicGet(&extra_ready) && waited < 120000 && strstr(rel, "spdungeon1"); waited += 20) SDL_Delay(20);   // still being built
     for (int i = 0; i < n_extra; i++) if (!strcmp(rel, extra[i].rel)) { snprintf(out, cap, "%s", extra[i].host); return host_exists(out); }
+    for (int i = 0; i < n_extra; i++) if (same_but_version(rel, extra[i].rel)) {
+        static int told;
+        snprintf(out, cap, "%s", extra[i].host);
+        if (!host_exists(out)) return 0;
+        if (!told++) rlog("[files] %s (the version the game's tables still name) is read from %s\n", rel, extra[i].rel);
+        return 1;
+    }
     return 0;
 }
 // The game has a copy of its own again (it downloaded or wrote the file): the name is no longer hidden. Without this, a
@@ -713,6 +735,7 @@ static int64_t do_hypercall(uint64_t nr, uint64_t *a) {
         return video_paced();
     }
     case HC_POLL_EVENT: return video_poll(g2h(a[0]));
+    case HC_TOUCH_TAKEN: video_touch_taken((int)a[0], (int)a[1]); return 0;
     case HC_WINDOW_SIZE: video_size(g2h(a[0]), g2h(a[1])); return 0;
     case HC_HTTP_START: { int job = http_start(g2h(a[0])); block_current_on_job(job); return 0; }
     case HC_HTTP_READ: http_read((int)a[0], g2h(a[1]), g2h(a[2])); return 0;
@@ -762,7 +785,7 @@ int guest_page_ok(uint64_t addr) { return addr >= GUEST_BASE && addr < GUEST_BAS
 static int unlocked_call(uint64_t nr) {
     return nr >= HC_GL_BASE || nr == HC_PRESENT || nr == HC_POLL_EVENT || nr == HC_WINDOW_SIZE || nr == HC_AES || nr == HC_MD5 || nr == HC_DECODE_LINES ||
            nr == HC_TEXT_INPUT || nr == HC_MESSAGE || nr == HC_CLIPBOARD || nr == HC_OPEN_URL ||
-           (nr >= HC_AUDIO_OPEN && nr <= HC_AUDIO_CTL) || (nr >= HC_WEB_SHOW && nr <= HC_WEB_PARAM);
+           (nr >= HC_AUDIO_OPEN && nr <= HC_AUDIO_CTL) || (nr >= HC_WEB_SHOW && nr <= HC_TOUCH_TAKEN);
 }
 // Returns 1 when the thread can simply continue, 0 when the core should go back to the scheduler.
 static int handle_svc(void) {
@@ -1052,10 +1075,10 @@ int main(int argc, char **argv) {
     snprintf(tz, sizeof tz, "TZ=<%+03d%02d>%+d:%02d", off / 3600, abs(off) % 3600 / 60, -off / 3600, abs(off) % 3600 / 60);
     envp[envc++] = tz;
     envp[envc++] = "FFBE_RUNNER=1";
-    static char passthru[11][2048];
+    static char passthru[13][2048];
     const char *names[] = {"TAPS", "NOTIF_CB", "VERBOSE", "TRACE_METHOD", "WIDTH", "HEIGHT", "FFBE_FONT", "FFBE_FRAMES", "TRACE_FUNCS",
-                           "FFBE_NO_SETUP_RESTART", "FFBE_QUIET_RESTART"};
-    for (int i = 0; i < 11; i++) if (getenv(names[i])) { snprintf(passthru[i], 2048, "%s=%s", names[i], getenv(names[i])); envp[envc++] = passthru[i]; }
+                           "FFBE_NO_SETUP_RESTART", "FFBE_QUIET_RESTART", "FFBE_SCROLL_LOG", "FFBE_KEEP_CONVERT_AS_IS"};
+    for (int i = 0; i < 13; i++) if (getenv(names[i])) { snprintf(passthru[i], 2048, "%s=%s", names[i], getenv(names[i])); envp[envc++] = passthru[i]; }
 
     load_guest(argv[2], argc - 2, argv + 2, envp, envc);
     SDL_Thread *tk = SDL_CreateThread(ticker, "ticker", NULL), *workers[MAXCORES] = {0};

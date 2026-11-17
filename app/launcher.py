@@ -2,7 +2,7 @@ r"""Exvius Revival Desktop: first-run setup and start-up.
 
 What it does, in order:
   1. asks for the game's APK (version 9.1.0) and copies the game library and assets out of it;
-  2. downloads the game data for the local server (about 14.6 GB, resumable);
+  2. downloads the game data for the local server (about 14.9 GB, resumable);
   3. starts the local game server on this computer only (127.0.0.1), then the game window;
   4. stops the server when the game window closes.
 
@@ -12,10 +12,11 @@ Everything it creates stays inside the folder this program was unpacked to:
   save\      your save and the server's records
   logs\      log files
   pictures\  pictures taken with the camera button in the game window
+  update\    a downloaded update while it is put in place, and the files the last update replaced (updater.py)
   settings.json  what was chosen in Settings
 Deleting the folder removes all of it. Nothing is written to the registry or anywhere else.
 
-Without a window:  launcher.py --headless [--apk FILE] [--skip-data] [--play]
+Without a window:  launcher.py --headless [--apk FILE] [--skip-data] [--play] [--check-update] [--update]
 """
 from __future__ import annotations
 
@@ -48,6 +49,9 @@ RUNNER_DIR = HOME / 'runner'
 WINDOWS = os.name == 'nt'
 RUNNER = RUNNER_DIR / ('runner.exe' if WINDOWS else 'runner')
 SETTINGS = HOME / 'settings.json'
+if str(APP) not in sys.path:
+    sys.path.insert(0, str(APP))
+from version import VERSION  # noqa: E402 - this program's own version (app/version.py)
 
 GAME_VERSION = '9.1.0'
 LIBRARY_ENTRY = 'lib/arm64-v8a/libgame.so'
@@ -220,6 +224,23 @@ def data_status() -> tuple[bool, float]:
     return False, sum(pack['size'] for pack in packs[first:]) / 1e9
 
 
+def data_missing() -> dict:
+    """What the data download would fetch: gigabytes to download, gigabytes of room needed while it unpacks (each
+    pack's zip is deleted once it is unpacked), how many packs, and whether any data is installed already."""
+    manifest = json.loads((SERVER / 'latest.json').read_text(encoding='utf-8'))
+    fetch_data = _fetcher()
+    packs = [pack for pack in manifest['packs'] if pack['id'] not in fetch_data.SKIP]
+    try:
+        installed = json.loads((DATA / 'installed.json').read_text(encoding='utf-8'))
+    except (OSError, ValueError):
+        installed = {}
+    first = next((i for i, pack in enumerate(packs) if installed.get(pack['id']) != pack['sha256']), None)
+    todo = packs[first:] if first is not None else []
+    room = sum(pack.get('unpackedSize', pack['size']) for pack in todo) + max((pack['size'] for pack in todo), default=0)
+    return {'download': sum(pack['size'] for pack in todo) / 1e9, 'room': room / 1e9 + 0.5 if todo else 0.0,
+            'packs': len(todo), 'have_some': bool(installed)}
+
+
 def fetch_game_data(report=lambda line: None) -> None:
     fetch_data = _fetcher()
     seen = {'certificate': False}
@@ -361,7 +382,20 @@ def _drop_copies_read_in_place() -> None:
         pass
 
 
+def _game_fonts() -> None:
+    """The game's two fonts sit where the game can read them (client\\): the one its text is set in and the one
+    that fills in the characters it lacks. An install made by an earlier version has only the first."""
+    for name in ('font.ttf', 'font2.ttf'):
+        source, target = RUNNER_DIR / name, CLIENT / name
+        try:
+            if source.is_file() and (not target.is_file() or target.stat().st_size != source.stat().st_size):
+                shutil.copyfile(source, target)
+        except OSError:
+            pass
+
+
 def start_game(port: int, extra_environment: dict | None = None) -> subprocess.Popen:
+    _game_fonts()
     environment = dict(os.environ)
     environment['FFBE_SERVER'] = f'127.0.0.1:{port}'
     environment['FFBE_PICTURES'] = str(HOME / 'pictures')      # where the camera button in the game window saves
@@ -440,11 +474,49 @@ def play(extra_environment: dict | None = None, on_started=lambda: None) -> int:
 # ----------------------------------------------------------------------------------------------------
 # Without a window
 # ----------------------------------------------------------------------------------------------------
+def headless_update(args, say) -> int:
+    """--check-update / --update: the updater's steps without the start window (used by the tests)."""
+    import updater
+    _use_system_certificates()
+    done = updater.result(HOME)
+    if done:
+        say(f"last update: {'installed' if done['ok'] else 'not installed'} ({done['from']} -> {done['to']}) {done['reason']}")
+    found = updater.offer(VERSION, str(settings().get('update_skip', '')), log=say)
+    if not found:
+        say(f'no update to offer (version {VERSION} is installed)')
+        return 0
+    say(f"version {found['version']} is offered ({VERSION} installed): {found['summary']}")
+    if not args.update or found['by_hand']:
+        return 0
+    last = [-1]
+
+    def progress(text):
+        def report(done_bytes, total):
+            percent = done_bytes * 100 // max(1, total)
+            if percent // 25 != last[0]:
+                last[0] = percent // 25
+                say(f'{text}: {percent}%')
+        return report
+    try:
+        archive = updater.download(HOME, found, progress('downloading'))
+        last[0] = -1
+        items = updater.stage(HOME, archive, found, VERSION, progress('unpacking'))
+        say('unpacked: ' + ', '.join(items))
+        updater.hand_over(HOME)
+    except updater.UpdateError as exc:
+        say('Stopped: ' + str(exc))
+        return 1
+    say('handed over; closing')
+    return 0
+
+
 def headless(args) -> int:
     def say(text):
         print(text, flush=True)
 
     try:
+        if args.check_update or args.update:
+            return headless_update(args, say)
         if args.apk or not game_installed():
             if not args.apk:
                 say('The game is not set up yet: pass the APK with --apk FILE')
@@ -525,6 +597,8 @@ def set_setting(entry: dict, value: str) -> None:
             values.pop(entry['key'], None)
         else:
             values[entry['key']] = (value == '1') if entry['kind'] == 'toggle' else (int(value) if value.isdigit() else value)
+        if entry['key'] == 'update_check':           # switching it off and on again also forgets a skipped version
+            values.pop('update_skip', None)
     else:
         chosen = values.setdefault('server_environment', {})
         if value == release_environment().get(entry['key'], entry['default']):
@@ -599,11 +673,12 @@ def window() -> int:
     events: queue.Queue = queue.Queue()
     state = {'busy': False, 'headline': '', 'detail': '', 'main': ('', None), 'hot': None, 'progress': None, 'status': '',
              'notes': [], 'tick': 0, 'photo': None, 'dirty': True, 'corner': None, 'pressed': None, 'armed': None, 'icon': None,
-             'icons': None, 'settings': None}
+             'icons': None, 'settings': None, 'offer': None, 'pending': None, 'notice': None}
     # The window has no frame from the system unless "Windows title bar" is chosen in Settings: the page is the whole
     # window, pressing on a free part of it moves it, and its three buttons are drawn in its top right corner.
     own_frame = window_settings().get('system_frame', '0') != '1'
     figures = art.heroes(SAVE, DATA, SERVER / 'engine')
+    art.Page.version = VERSION
     pages = {'normal': art.Page(scale, figures)}
     page = pages['normal']
     width, height = page.size
@@ -628,6 +703,11 @@ def window() -> int:
 
     def menu() -> list:
         idle = not state['busy']
+        if state['notice']:                          # something to read first: one line to go on
+            return [('notice_ok', 'OK', True)]
+        if state['offer']:
+            first = ('update_page', 'Open the download page') if state['offer']['by_hand'] else ('update_now', 'Update now')
+            return [first + (idle,), ('update_later', 'Later', idle), ('update_skip', 'Skip this version', idle)]
         rows = [('main', state['main'][0], idle and state['main'][1] is not None), ('settings', 'Settings', idle)]
         if game_installed():
             rows.append(('apk', 'Use a different APK', idle))
@@ -674,7 +754,7 @@ def window() -> int:
             except SetupError as exc:
                 events.put(('failed', str(exc)))
             except Exception as exc:  # noqa: BLE001 - show anything unexpected instead of closing silently
-                events.put(('failed', f'{type(exc).__name__}: {exc}'))
+                events.put(('failed', str(exc) if type(exc).__name__ == 'UpdateError' else f'{type(exc).__name__}: {exc}'))
         threading.Thread(target=work, daemon=True).start()
 
     def choose_apk() -> None:
@@ -693,13 +773,14 @@ def window() -> int:
         run(job)
 
     def download_data() -> None:
-        _, gigabytes = data_status()
-        if free_space_gb(DATA) < gigabytes + 16:
-            if not messagebox.askyesno('Low disk space', f'About {gigabytes + 16:.0f} GB of free space is needed here while '
-                                       f'the game data is downloaded and unpacked, and {free_space_gb(DATA):.0f} GB is free. '
+        missing = data_missing()
+        if free_space_gb(DATA) < missing['room']:
+            if not messagebox.askyesno('Low disk space', f"About {missing['room']:.1f} GB of free space is needed here while "
+                                       f'the game data is downloaded and unpacked, and {free_space_gb(DATA):.1f} GB is free. '
                                        'Continue anyway?'):
                 return
-        state.update(headline='Downloading\nthe game data', detail='This window can be closed and the download continued later; '
+        state.update(headline='Downloading\nnew game data' if missing['have_some'] else 'Downloading\nthe game data',
+                     detail='This window can be closed and the download continued later; '
                      'it carries on where it stopped.', progress='busy', status='', notes=[])
         run(fetch_game_data, lambda line: events.put(('note', line)))
 
@@ -710,25 +791,80 @@ def window() -> int:
 
     def refresh() -> None:
         state.update(progress=None, status='')
+        if state['notice']:
+            state.update(headline=state['notice'][0], detail=state['notice'][1], main=('', None))
+            state['dirty'] = True
+            return
+        if state['offer']:
+            found = state['offer']
+            about = (found['summary'] + ' ') if found['summary'] else ''
+            if found['by_hand']:
+                how = ('This one cannot be installed from here: download its zip from the release page and unpack it over this '
+                       'folder, as the README describes.')
+            else:
+                how = 'Your save, your settings and the game data stay as they are.'
+            state.update(headline=f"Version {found['version']}\nis available", detail=f'You have {VERSION}. {about}{how}',
+                         main=('', None))
+            state['dirty'] = True
+            return
         if not game_installed():
             state.update(headline='Please insert your\nAPK / XAPK',
                          detail='This program contains no game files. Choose your own FINAL FANTASY BRAVE EXVIUS '
                                 f'{GAME_VERSION} APK (Android, Global version) and the game is copied out of it into this folder.',
                          main=('Choose APK or XAPK', choose_apk))
         else:
-            ready, gigabytes = data_status()
-            if not ready:
+            ready, _ = data_status()
+            missing = data_missing() if not ready else {}
+            if not ready and missing['have_some']:      # after an update: only the packs this version added or changed
+                state.update(headline='New game data',
+                             detail=f"This version comes with {missing['download']:.1f} GB of new game data. Only what is new is "
+                                    f"downloaded; it needs about {missing['room']:.1f} GB of free space while it unpacks.",
+                             main=('Download new game data', download_data))
+            elif not ready:
                 state.update(headline='One more disc:\nthe game data',
-                             detail=f'{gigabytes:.1f} GB to download into the "data" folder here. It needs about {gigabytes + 16:.0f} GB '
-                                    'of free space while it unpacks.',
+                             detail=f"{missing['download']:.1f} GB to download into the \"data\" folder here. It needs about "
+                                    f"{missing['room']:.0f} GB of free space while it unpacks.",
                              main=('Download game data', download_data))
             else:
                 state.update(headline='Ready to play', detail='The game runs entirely on this computer. Your save is in the "save" folder.',
                              main=('Play', start_playing))
         state['dirty'] = True
 
+    def update_now() -> None:
+        found = state['offer']
+        state.update(offer=None, headline='Updating', detail=f"Downloading version {found['version']}. The program closes and "
+                     'starts again by itself when the update is ready.', progress=0.0, status='', notes=[])
+
+        def job():
+            import updater
+            archive = updater.download(HOME, found, lambda done, total: events.put(('progress', ('Downloading the update', done, total))))
+            updater.stage(HOME, archive, found, VERSION, lambda done, total: events.put(('progress', ('Unpacking the update', done, total))))
+            events.put(('update_ready', found))
+        run(job)
+
+    def update_answer(key: str) -> None:
+        found = state['offer']
+        if key == 'update_now':
+            update_now()
+            return
+        if key == 'update_page':
+            import webbrowser
+            webbrowser.open(found['page'])
+        elif key == 'update_skip':                   # not offered again; a later version is
+            values = settings()
+            values['update_skip'] = found['version']
+            save_settings(values)
+            log_error(f"update: {found['version']} skipped")
+        state['offer'] = None
+        refresh()
+
     def click(key: str) -> None:
-        if key == 'main' and state['main'][1]:
+        if key == 'notice_ok':
+            state['notice'] = None
+            refresh()
+        elif key.startswith('update_') and state['offer']:
+            update_answer(key)
+        elif key == 'main' and state['main'][1]:
             state['main'][1]()
         elif key == 'settings':
             open_settings()
@@ -814,6 +950,18 @@ def window() -> int:
                     state.update(status=f'{text}: {done * 100 // max(1, total)}%', progress=done / max(1, total), dirty=True)
                 elif kind == 'note':
                     note(value)
+                elif kind == 'update':               # the check found a newer release; asked when nothing else is going on
+                    state['pending'] = value
+                elif kind == 'update_ready':         # downloaded, checked and unpacked: the stub puts it in place
+                    import updater
+                    try:
+                        updater.hand_over(HOME)
+                    except updater.UpdateError as exc:
+                        messagebox.showerror('Exvius Revival Desktop', str(exc))
+                    else:
+                        log_error(f"update: {value['version']} unpacked; closing so it can be put in place")
+                        root.destroy()
+                        return
                 elif kind == 'hide':
                     root.withdraw()
                 elif kind in ('done', 'failed'):
@@ -834,6 +982,10 @@ def window() -> int:
                     refresh()
         except queue.Empty:
             pass
+        if state['pending'] and not state['busy'] and not state['offer'] and not state['notice'] and not settings_open():
+            state['offer'], state['pending'] = state['pending'], None
+            state.update(hot=None)
+            refresh()
         if state['progress'] == 'busy':
             state['tick'] += 1
             state['dirty'] = state['dirty'] or state['tick'] % 2 == 0
@@ -892,6 +1044,44 @@ def window() -> int:
     root.protocol('WM_DELETE_WINDOW', close)
     refresh()
     draw()
+
+    def after_update() -> None:
+        """Say what the last update ended as (update\\result.txt, written by the stub)."""
+        import updater
+        done = updater.result(HOME)
+        if done and done['ok']:
+            log_error(f"update: {done['from']} -> {done['to']} installed")
+            note(f"Updated to version {done['to']}. The files of {done['from']} are kept in update\\backup.")
+        elif done:
+            log_error(f"update: {done['from']} -> {done['to']} not installed: {done['reason']}")
+            # Said on the page itself, not in a box of its own: a box opened before this window is up can end up behind it.
+            state['notice'] = ('The update was\nnot installed', (done['reason'] or 'Nothing was changed.') + ' The details are in logs\\update.log.')
+            refresh()
+        elif updater.staged_version(HOME):
+            note(f'Version {updater.staged_version(HOME)} is unpacked and is put in place the next time this program starts.')
+
+    def check_for_update() -> None:
+        """Ask for the newest release, off the window's thread. No answer (offline) is no offer."""
+        if not settings().get('update_check', True):
+            log_error('update check: switched off in Settings')
+            return
+        if not WINDOWS and not os.environ.get('EXVIUS_DESKTOP_UPDATE_URL'):
+            return                                   # updates are Windows packages; elsewhere only a test asks
+        _use_system_certificates()
+
+        def work():
+            try:
+                import updater
+                found = updater.offer(VERSION, str(settings().get('update_skip', '')), log=log_error)
+                if found:
+                    events.put(('update', found))
+            except Exception:  # noqa: BLE001 - the check is a courtesy; it must never get in the way
+                import traceback
+                log_error(traceback.format_exc())
+        threading.Thread(target=work, daemon=True).start()
+
+    after_update()
+    check_for_update()
     if os.environ.get('EXVIUS_DESKTOP_OPEN_SETTINGS'):       # for screenshots in tests
         root.after(400, lambda: open_settings(int(os.environ.get('EXVIUS_DESKTOP_SETTINGS_PAGE', '0'))))
     poll()
@@ -912,7 +1102,7 @@ def keep_errors() -> None:
         if path.is_file() and path.stat().st_size > 1_000_000:
             path.unlink()
         _error_log = open(path, 'a', encoding='utf-8', buffering=1)
-        _error_log.write(f'--- started {time.strftime("%Y-%m-%d %H:%M:%S")}, Python {sys.version.split()[0]}, {sys.platform}\n')
+        _error_log.write(f'--- started {time.strftime("%Y-%m-%d %H:%M:%S")}, version {VERSION}, Python {sys.version.split()[0]}, {sys.platform}\n')
         if sys.stderr is None:
             sys.stderr = _error_log
         if sys.stdout is None:
@@ -950,6 +1140,8 @@ def main() -> int:
     parser.add_argument('--skip-data', action='store_true', help='do not download the game data')
     parser.add_argument('--play', action='store_true', help='start the server and the game after setting up')
     parser.add_argument('--env', action='append', default=[], metavar='NAME=VALUE', help='extra setting for the game window')
+    parser.add_argument('--check-update', action='store_true', help='with --headless: say whether a newer version is offered')
+    parser.add_argument('--update', action='store_true', help='with --headless: download the offered version and hand it over to be put in place')
     args = parser.parse_args()
     for folder in (CLIENT, LOGS):
         folder.mkdir(parents=True, exist_ok=True)

@@ -10,11 +10,18 @@ rm -rf "$OUT"
 mkdir -p "$OUT/app" "$OUT/runner" "$OUT/server" "$OUT/source"
 cp build/windows/stub.exe "$OUT/Exvius Revival Desktop.exe"
 cp app/*.py "$OUT/app/"
+# VERSION=<number> labels the package with another version than app/version.py says (release.sh passes it; a test
+# build labelled lower than the newest release is how the updater is tried out).
+if [ -n "$VERSION" ]; then
+  echo "$VERSION" | grep -Eq '^[0-9]+(\.[0-9]+){1,3}$' || { echo "pack.sh: VERSION must look like 0.2.0 (now: $VERSION)"; exit 1; }
+  sed -i "s/^VERSION = .*/VERSION = '$VERSION'/" "$OUT/app/version.py"
+fi
 mkdir -p "$OUT/app/fonts"
 cp fonts/*.ttf fonts/Cinzel-OFL.txt "$OUT/app/fonts/"
 cp build/windows/runner-stripped.exe "$OUT/runner/runner.exe"
 cp build/windows/SDL2.dll build/game.elf "$OUT/runner/"
 cp fonts/Roboto-Regular.ttf "$OUT/runner/font.ttf"
+cp fonts/DejaVuSans.ttf "$OUT/runner/font2.ttf"      # for the characters the first lacks: the stars of "5★" and other symbols
 cp docs/README.txt docs/LICENSES.txt "docs/QUICK START.txt" "$OUT/"
 # Python: the runtime without debug symbols, headers, the test suite and pip
 cp -r "$PY" "$OUT/python"
@@ -49,6 +56,7 @@ cp guest/*.c guest/*.h guest/build.sh "$OUT/source/guest/"
 cp tools/gen_gl.py tools/make_icon.py "$OUT/source/tools/"
 cp stub/stub.c stub/stub.rc "$OUT/source/stub/"
 cp fonts/* "$OUT/source/fonts/"
-cp build_linux.sh build_windows.sh pack.sh "$OUT/source/"
+cp build_linux.sh build_windows.sh pack.sh release.sh "$OUT/source/"
 cp docs/BUILDING.txt "$OUT/source/" 2>/dev/null || true
+echo "version $(sed -n "s/^VERSION = '\(.*\)'/\1/p" "$OUT/app/version.py"), server $(cut -c1-7 "$OUT/server/REVISION.txt")"
 du -sh "$OUT" "$OUT"/*

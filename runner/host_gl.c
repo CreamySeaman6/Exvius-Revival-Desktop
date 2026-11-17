@@ -327,7 +327,7 @@ void video_init(int w, int h, const char *title) {
 void video_size(int *w, int *h) { if (!win) video_init(640, 960, "FINAL FANTASY BRAVE EXVIUS"); *w = game_w; *h = game_h; }
 
 // ---- what the bar's buttons do ---------------------------------------------------------------------------
-static struct HcEvent synth[64]; static unsigned long synth_at[64]; static int n_synth;
+static struct HcEvent synth[64]; static unsigned long synth_at[64]; static int n_synth;      // events made here, each with the frame it is due in
 static void synth_add(int type, float x, float y, int key, unsigned long at) { if (n_synth < 64) { synth[n_synth] = (struct HcEvent){.type = type, .x = x, .y = y, .key = key}; synth_at[n_synth++] = at; } }
 void video_press_back(void) { synth_add(HEV_KEY_DOWN, 0, 0, 4, frame_no + 1); synth_add(HEV_KEY_UP, 0, 0, 4, frame_no + 4); }
 void video_take_picture(void) { picture_wanted = 1; }
@@ -437,9 +437,17 @@ static void save_shot_as(const char *path);
 static void push_mouse(int type, int x, int y, int wheel) {
     SDL_Event e; SDL_zero(e);
     e.type = (Uint32)type;
-    if (type == SDL_MOUSEWHEEL) { e.wheel.y = wheel; SDL_Event m; SDL_zero(m); m.type = SDL_MOUSEMOTION; m.motion.x = x; m.motion.y = y; m.motion.which = 9999; SDL_PushEvent(&m); }
-    else if (type == SDL_MOUSEMOTION) { e.motion.x = x; e.motion.y = y; e.motion.which = 9999; }
+    (void)wheel;
+    if (type == SDL_MOUSEMOTION) { e.motion.x = x; e.motion.y = y; e.motion.which = 9999; }
     else { e.button.button = SDL_BUTTON_LEFT; e.button.x = x; e.button.y = y; e.button.which = 9999; }
+    SDL_PushEvent(&e);
+}
+static void push_wheel(int x, int y, float notches) {            // "wheel X Y N": N may be a fraction of a notch, as a touch pad sends
+    SDL_Event m; SDL_zero(m); m.type = SDL_MOUSEMOTION; m.motion.x = x; m.motion.y = y; m.motion.which = 9999; SDL_PushEvent(&m);
+    SDL_Event e; SDL_zero(e); e.type = SDL_MOUSEWHEEL; e.wheel.y = (int)notches;
+#if SDL_VERSION_ATLEAST(2, 0, 18)
+    e.wheel.preciseY = notches;
+#endif
     SDL_PushEvent(&e);
 }
 static void control_poll(void) {
@@ -467,7 +475,7 @@ static void control_poll(void) {
             for (int i = 1; i <= 8; i++) push_mouse(SDL_MOUSEMOTION, (int)(x + (x2 - x) * i / 8), (int)(y + (y2 - y) * i / 8), 0);
             push_mouse(SDL_MOUSEBUTTONUP, (int)x2, (int)y2, 0);
         }
-        else if (sscanf(line, "wheel %f %f %d", &x, &y, &n) == 3) push_mouse(SDL_MOUSEWHEEL, (int)x, (int)y, n);
+        else if (sscanf(line, "wheel %f %f %f", &x, &y, &x2) == 3) push_wheel((int)x, (int)y, x2);
         else if (sscanf(line, "size %d", &n) == 1) video_set_window_size(n);
         else if (sscanf(line, "resize %f %f", &x, &y) == 2) { SDL_SetWindowSize(win, (int)x, (int)y); window_resized(); }
         else if (!strncmp(line, "fullscreen", 10)) video_toggle_fullscreen();
@@ -568,37 +576,49 @@ static void to_game(int x, int y, float *gx, float *gy) {
     if (*gx < 0) *gx = 0; if (*gx > game_w - 1) *gx = (float)(game_w - 1);
     if (*gy < 0) *gy = 0; if (*gy > game_h - 1) *gy = (float)(game_h - 1);
 }
-// The mouse wheel. The game only knows touches, so turning the wheel over the game becomes a finger that presses where
-// the pointer is, slides, rests and lifts: lists scroll as they do under a thumb. The rest before lifting keeps the
-// list from being flung. `wheel=0` in desktop.ini turns it off.
-static struct { int state, hold, still; float ox, oy, x, y, px, py; unsigned long last, frame; } whl;
-static int ptr_x, ptr_y;
-
 // ---- the mouse as a finger -------------------------------------------------------------------------------
 // The game expects a finger: it goes down, perhaps slides, and lifts, one thing after the other, a frame at a time.
 // A mouse is quicker and sloppier than that, and the game's main thread sometimes stops for a moment (loading an
-// attack's effects), after which several clicks arrive at once. Three rules keep what the game sees in order:
+// attack's effects), after which several clicks arrive at once. These rules keep what the game sees in order:
 //  - A release that comes within three frames of its press waits until the third frame (the game's buttons ignore
 //    a touch that is down for less than a frame or two). While it waits, nothing else from the mouse is looked at,
 //    so a second click made in the meantime is played after the first, not into the middle of it.
 //  - After a finger has lifted, the next one goes down in the next frame at the earliest.
+//  - While the button is down the game is told where the pointer is once a frame, as a touch screen tells it where
+//    a finger is, however many times the mouse reported in between. The game's lists work out how fast a finger
+//    was going when it lifted from the last two places they were told of; given every report of a mouse (up to a
+//    thousand a second) that was a hundredth of the real speed, and a list let go in mid-flick stopped dead.
+//  - A finger that has come to rest before it lifts is reported once more where it rests, so the list knows it
+//    stopped and stays where it was put. (A mouse at rest reports nothing; without this the list went by the last
+//    two reports before the rest and glided on.)
 //  - A click made while the pointer is travelling is a tap where it landed, not a slide: see tap_begin.
 #define TAP_FRAMES 3
 static struct { int held; float x, y; unsigned long at; } late_up;       // a quick click's release, waiting for its frame
 static unsigned long up_frame = (unsigned long)-1;                       // the frame in which the game was last told of a lift
 static SDL_Event deferred; static int has_deferred;                     // one event put aside to be handled first, next time
+static int ptr_x, ptr_y;                                                 // where the pointer is, in the window's pixels
+// The finger the mouse button holds down: where the game was last told it is, when, and whether it has moved.
+static struct { int x, y, moved, rested, still; unsigned long told, seen; uint64_t moved_ns; } fin;
+#define REST_NS 40000000ULL                                             // still for this long before lifting: the finger had stopped
+// "Still" is also counted in frames (fin.still: frames that went by with the pointer where the game was last told
+// it is), because the clock alone says too much when frames are long: at 20 frames a second the last move of a
+// flick and its release can be read 50 ms apart, and that is not a finger that stopped.
 
 // A click made in passing. Someone who clicks units one after the other does not stop the mouse for each click:
 // the button goes down and comes up some way apart, and passed on as it is the game reads a slide (in a battle:
 // the pull that opens abilities or guards). A real slide starts from rest. So if the pointer was already moving
 // when the button went down, its movements are kept from the game while the click could still be a click: for
-// TAP_MS, unless it goes further than TAP_FAR of the picture's height. A release inside that is a tap at the
+// TAP_MS, unless it goes further than a share of the picture's height. A release inside that is a tap at the
 // place where the button went down. Past it, the finger is where the pointer is and slides as usual.
+// How far: a quarter of the height (TAP_FAR), but only TAP_FAR_LIST where the game says the press landed on one of
+// its scrolling lists (video_touch_taken). There a flick is the usual thing to do, and held back that long a quick
+// flick never moved the list at all and opened whatever was under the pointer instead.
 // `tap_guard=0` in desktop.ini turns this off.
 #define TAP_MS 170
 #define TAP_FAR 0.25f
+#define TAP_FAR_LIST 0.06f
 #define TAP_NEAR 0.02f
-static struct { int on, sx, sy; float gx, gy; uint64_t since; } tap;
+static struct { int on, sx, sy; float gx, gy, far; uint64_t since; } tap;
 static struct { uint64_t t; float step; } trail[16]; static int trail_at;  // the pointer's last movements: when, how far
 static void trail_add(int x, int y) {
     static int lx, ly, have;
@@ -613,25 +633,45 @@ static int pointer_travelling(void) {                  // has it covered some gr
 }
 static void tap_begin(int x, int y, float gx, float gy) {
     tap.on = cfg_int("tap_guard", 1) && pointer_travelling();
-    tap.sx = x; tap.sy = y; tap.gx = gx; tap.gy = gy; tap.since = now_ns();
+    tap.sx = x; tap.sy = y; tap.gx = gx; tap.gy = gy; tap.far = TAP_FAR; tap.since = now_ns();
 }
 static int tap_over(int x, int y) {                     // has this press turned out to be a slide after all?
     float dx = (float)(x - tap.sx), dy = (float)(y - tap.sy), d = sqrtf(dx * dx + dy * dy);
-    if (d > ui_view.h * TAP_FAR) return 1;
+    if (d > ui_view.h * tap.far) return 1;
     return now_ns() - tap.since > TAP_MS * 1000000ULL && d > fmaxf(6, ui_view.h * TAP_NEAR);
 }
+// The game's word on the touch that has just gone down (HC_TOUCH_TAKEN, from guest/loader.c).
+static int touch_in_list, touch_on_bar;
+void video_touch_taken(int in_list, int on_bar) {
+    touch_in_list = in_list; touch_on_bar = on_bar;
+    if (in_list && tap.on) tap.far = TAP_FAR_LIST;
+    if (getenv("FFBE_TOUCH_LOG")) rlog("[touch] the game: %s\n", on_bar ? "on a list's scroll bar" : in_list ? "on a scrolling list" : "not on a scrolling list");
+}
+
+// ---- the mouse wheel ---------------------------------------------------------------------------------------
+// The game only knows touches, so turning the wheel over the game becomes a finger that presses where the pointer
+// is, slides, rests and lifts: lists scroll as they do under a thumb. The rest before lifting keeps the list from
+// gliding on. Its touches are marked (HcEvent.id = 1) and the game's side (guest/loader.c) sees to it that such a
+// finger never takes hold of a list's scroll bar (under the pointer at the right edge of a list, where the slide
+// would drag the bar the other way: turning down sent the list up) and never counts as a tap on what it pressed.
+// A turn too small for a slide the game would count (WHEEL_START; touch pads and free-spinning wheels send
+// fractions of a notch) waits for more, and is forgotten if no more comes. `wheel=0` in desktop.ini turns it off.
+#define WHEEL_STEP 0.085f                               // one notch, as a share of the picture's height
+#define WHEEL_START 0.03f                               // the shortest slide worth making
+static struct { int state, hold, still; float ox, oy, x, y, px, py, went; unsigned long last, frame; } whl;
+static void wheel_touch(int type) { if (n_synth < 64) { synth[n_synth] = (struct HcEvent){.type = type, .id = 1, .x = whl.x, .y = whl.y}; synth_at[n_synth++] = frame_no; } }
+static float clampf(float v, float low, float high) { return v < low ? low : v > high ? high : v; }
 static void wheel_turn(float dx, float dy) {
     if (!cfg_int("wheel", 1)) return;
     if (ptr_x < ui_view.x || ptr_x >= ui_view.x + ui_view.w || ptr_y < ui_view.y || ptr_y >= ui_view.y + ui_view.h) return;
-    float step = game_h * 0.085f;
+    float step = game_h * WHEEL_STEP;
     whl.px += dx * step; whl.py += dy * step;
     whl.last = frame_no;
-    if (whl.state == 0) to_game(ptr_x, ptr_y, &whl.ox, &whl.oy);
+    to_game(ptr_x, ptr_y, &whl.ox, &whl.oy);            // where the next finger goes down: under the pointer
 }
+// Move the finger along one axis toward what is still to go; what could not be gone (the picture's edge) stays to go.
 static float wheel_axis(float *at, float *pending, float low, float high) {
-    float target = *at + *pending;
-    if (target < low) target = low; if (target > high) target = high;
-    float room = target - *at, move = room * 0.45f;
+    float room = clampf(*at + *pending, low, high) - *at, move = room * 0.45f;
     if (fabsf(room) < 0.5f) return 0;
     if (fabsf(move) < 7) move = room < 0 ? -fminf(7, -room) : fminf(7, room);
     *at += move; *pending -= move;
@@ -640,18 +680,42 @@ static float wheel_axis(float *at, float *pending, float low, float high) {
 static void wheel_tick(void) {
     if (whl.frame == frame_no) return;
     whl.frame = frame_no;
+    float start = game_h * WHEEL_START, low = 4, right = (float)game_w - 5, bottom = (float)game_h - 5;
     if (whl.state == 0) {
-        if ((fabsf(whl.px) < 0.5f && fabsf(whl.py) < 0.5f) || mouse_down || late_up.held || n_synth) { if (mouse_down || late_up.held) whl.px = whl.py = 0; return; }
-        whl.x = whl.ox; whl.y = whl.oy; whl.state = 1; whl.hold = 2; whl.still = 0;
-        synth_add(HEV_TOUCH_DOWN, whl.x, whl.y, 0, frame_no);
+        if (mouse_down || late_up.held) { whl.px = whl.py = 0; return; }
+        float want = fmaxf(fabsf(whl.px), fabsf(whl.py));
+        if (want < start) { if (want > 0 && frame_no - whl.last > 12) whl.px = whl.py = 0; return; }
+        if (n_synth) return;
+        // Under the pointer, but with room to slide: what is to go, up to a third of the picture. Near the picture's
+        // edge the finger goes down that much further in, so one press does what three short ones did before.
+        float room_y = clampf(fabsf(whl.py), start * 1.5f, game_h * 0.33f), room_x = clampf(fabsf(whl.px), start * 1.5f, game_w * 0.33f);
+        whl.x = clampf(whl.ox, low, right); whl.y = clampf(whl.oy, low, bottom);
+        if (whl.py <= -start && whl.y - low < room_y) whl.y = low + room_y;
+        if (whl.py >= start && bottom - whl.y < room_y) whl.y = bottom - room_y;
+        if (whl.px <= -start && whl.x - low < room_x) whl.x = low + room_x;
+        if (whl.px >= start && right - whl.x < room_x) whl.x = right - room_x;
+        whl.state = 1; whl.hold = 2; whl.still = 0; whl.went = 0;
+        wheel_touch(HEV_TOUCH_DOWN);
     } else if (whl.state == 1) {
         if (whl.hold > 0) { whl.hold--; return; }
-        float mx = wheel_axis(&whl.x, &whl.px, 4, (float)game_w - 5), my = wheel_axis(&whl.y, &whl.py, 4, (float)game_h - 5);
-        synth_add(HEV_TOUCH_MOVE, whl.x, whl.y, 0, frame_no);
-        if (mx != 0 || my != 0) { whl.still = 0; return; }
-        int more = fabsf(whl.px) >= 0.5f || fabsf(whl.py) >= 0.5f;       // more to go, but the finger is at the picture's edge
-        if (++whl.still >= 5 && (more || frame_no - whl.last >= 9)) { synth_add(HEV_TOUCH_UP, whl.x, whl.y, 0, frame_no); whl.state = 2; whl.hold = 3; }
+        float mx = wheel_axis(&whl.x, &whl.px, low, right), my = wheel_axis(&whl.y, &whl.py, low, bottom);
+        wheel_touch(HEV_TOUCH_MOVE);
+        if (mx != 0 || my != 0) { whl.still = 0; whl.went += fabsf(mx) + fabsf(my); return; }
+        int more = fabsf(whl.px) >= start || fabsf(whl.py) >= start;     // more to go, but the finger is at the picture's edge
+        if (++whl.still >= 3 && (more || frame_no - whl.last >= 9)) {
+            wheel_touch(HEV_TOUCH_UP); whl.state = 2; whl.hold = 3;
+            // A remainder too small to slide is dropped, not kept for next time; and so is one this finger could not
+            // go any of (it would only be pressed again and again, on whatever is under the pointer).
+            if (!more || whl.went < 1) whl.px = whl.py = 0;
+        }
     } else if (--whl.hold <= 0) whl.state = 0;
+}
+// Tell the game where the mouse's finger is now.
+static int finger_at(struct HcEvent *ev, int x, int y) {
+    if (x != fin.x || y != fin.y) { fin.moved = 1; fin.moved_ns = now_ns(); fin.rested = 0; fin.still = 0; }
+    fin.x = x; fin.y = y; fin.told = frame_no;
+    ev->type = HEV_TOUCH_MOVE; to_game(x, y, &ev->x, &ev->y);
+    return 1;
 }
 static int poll_one(struct HcEvent *ev) {
     SDL_Event e;
@@ -670,10 +734,6 @@ static int poll_one(struct HcEvent *ev) {
         ev->type = HEV_TOUCH_UP; ev->x = late_up.x; ev->y = late_up.y; return 1;
     }
     if (up_frame == frame_no) return 0;                 // a finger has just lifted: the next thing happens in the next frame
-    if (mouse_down && tap.on && tap_over(ptr_x, ptr_y)) {            // held too long or gone too far to be a click: it slides
-        tap.on = 0;
-        ev->type = HEV_TOUCH_MOVE; to_game(ptr_x, ptr_y, &ev->x, &ev->y); return 1;
-    }
     for (;;) {
         int again = has_deferred;                       // an event put aside earlier comes first, as it was left
         if (again) { e = deferred; has_deferred = 0; }
@@ -705,22 +765,29 @@ static int poll_one(struct HcEvent *ev) {
             if (whl.state == 1) {                       // the wheel's finger is still down: lift it, then press in the next frame
                 whl.state = 0; whl.px = whl.py = 0; up_frame = frame_no;
                 deferred = e; has_deferred = 1;
-                ev->type = HEV_TOUCH_UP; ev->x = whl.x; ev->y = whl.y; return 1;
+                ev->type = HEV_TOUCH_UP; ev->id = 1; ev->x = whl.x; ev->y = whl.y; return 1;
             }
             mouse_down = 1; touch_down_frame = frame_no; SDL_CaptureMouse(SDL_TRUE);     // a drag may leave the window
+            fin.x = e.button.x; fin.y = e.button.y; fin.moved = fin.rested = fin.still = 0; fin.told = fin.seen = frame_no; fin.moved_ns = now_ns();
             ev->type = HEV_TOUCH_DOWN; to_game(e.button.x, e.button.y, &ev->x, &ev->y);
             tap_begin(e.button.x, e.button.y, ev->x, ev->y);
             return 1;
         case SDL_MOUSEBUTTONUP: {
             if (e.button.button != SDL_BUTTON_LEFT || !mouse_down) break;
             float gx, gy; to_game(e.button.x, e.button.y, &gx, &gy);
-            if (tap.on) {
-                tap.on = 0;
-                if (tap_over(e.button.x, e.button.y)) {  // it did slide, and stopped before we looked: the finger goes there, then lifts
+            int click = tap.on && !tap_over(e.button.x, e.button.y);     // made in passing: the finger lifts where it went down
+            tap.on = 0;
+            if (click) { gx = tap.gx; gy = tap.gy; }
+            else {
+                // Before it lifts, the finger is where the button came up; and one that has rested there is told so.
+                int there = e.button.x == fin.x && e.button.y == fin.y;
+                int rest = there && fin.moved && !fin.rested && fin.still >= 1 && now_ns() - fin.moved_ns >= REST_NS;
+                if (!there || rest) {
                     deferred = e; has_deferred = 1;
-                    ev->type = HEV_TOUCH_MOVE; ev->x = gx; ev->y = gy; return 1;
+                    finger_at(ev, e.button.x, e.button.y);
+                    if (rest) fin.rested = 1;
+                    return 1;
                 }
-                gx = tap.gx; gy = tap.gy;               // a click: the finger lifts where it went down
             }
             mouse_down = 0; SDL_CaptureMouse(SDL_FALSE);
             // A very quick click (a touchpad tap, a mouse macro, a click made while the game was busy) can press and let
@@ -740,10 +807,7 @@ static int poll_one(struct HcEvent *ev) {
             wheel_turn(-dx, dy);
             break;
         }
-        case SDL_MOUSEMOTION:
-            if (!mouse_down) break;
-            if (tap.on) { if (!tap_over(e.motion.x, e.motion.y)) break; tap.on = 0; }
-            ev->type = HEV_TOUCH_MOVE; to_game(e.motion.x, e.motion.y, &ev->x, &ev->y); return 1;
+        case SDL_MOUSEMOTION: break;                    // where the pointer is now is passed on once a frame, below
         case SDL_KEYDOWN: case SDL_KEYUP: {
             int sym = e.key.keysym.sym, code = sym == SDLK_ESCAPE ? 4 : sym == SDLK_BACKSPACE ? 67 : (sym == SDLK_RETURN || sym == SDLK_KP_ENTER) ? 66 : 0;
             if (code) { ev->type = e.type == SDL_KEYDOWN ? HEV_KEY_DOWN : HEV_KEY_UP; ev->key = code; return 1; }
@@ -772,6 +836,15 @@ static int poll_one(struct HcEvent *ev) {
             break;
         }
     }
+    // Everything the mouse reported has been read. The finger follows the pointer: once a frame, and not while a
+    // click made in passing could still be a click.
+    if (mouse_down) {
+        if (tap.on && tap_over(ptr_x, ptr_y)) tap.on = 0;            // held too long or gone too far to be a click: it slides
+        if (!tap.on && fin.told != frame_no) {
+            if (ptr_x != fin.x || ptr_y != fin.y) return finger_at(ev, ptr_x, ptr_y);
+            if (fin.seen != frame_no) { fin.seen = frame_no; fin.still++; }      // a frame went by and the pointer has not moved
+        }
+    }
     return 0;
 }
 // ---- staying alive while the game is busy ---------------------------------------------------------------
@@ -796,7 +869,7 @@ int video_poll(struct HcEvent *ev) {
     pumped();
     int got = poll_one(ev);
     if (tell && got && (ev->type == HEV_TOUCH_DOWN || ev->type == HEV_TOUCH_UP || ev->type == HEV_TOUCH_MOVE))
-        rlog("[touch] %s %.0f %.0f frame %lu\n", ev->type == HEV_TOUCH_DOWN ? "down" : ev->type == HEV_TOUCH_UP ? "up" : "move", ev->x, ev->y, frame_no);
+        rlog("[touch] %s %.0f %.0f frame %lu%s\n", ev->type == HEV_TOUCH_DOWN ? "down" : ev->type == HEV_TOUCH_UP ? "up" : "move", ev->x, ev->y, frame_no, ev->id == 1 ? " (wheel)" : "");
     return got;
 }
 void video_shutdown(void) { if (ctx) SDL_GL_DeleteContext(ctx); if (win) SDL_DestroyWindow(win); SDL_Quit(); }

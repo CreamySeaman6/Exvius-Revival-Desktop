@@ -114,134 +114,72 @@ def page_picture(port: int, query: str) -> tuple[int, bytes]:
 
 
 # ----------------------------------------------------------------------------------------------------
-# Summon banner art that is not on this computer. The deal banners' art (step-ups, free dailies, value
-# summons...) is downloaded by the server from the Wayback Machine after it starts (deal_art.py), one file
-# every half second or slower; before that has finished, or when the archive cannot be reached, the server
-# answers 404. The game treats a failed banner download as a lost connection: "A connection error has
-# occurred" on the Summon screen, then back to the title (a user's report on 0.1.2, reproduced here with the
-# archive unreachable). A summon banner that would be a 404 is answered with a plain titled stand-in instead.
-# The game keeps every banner file it has downloaded, so each stand-in is listed in
-# save/banner-standins.txt; once the real file is on this computer the game's copy is deleted and the game
-# downloads the real one the next time it shows that banner.
+# Stand-in banner pictures left by 0.1.3. That version answered a summon banner picture the server did not
+# have yet with a plain titled stand-in of its own and listed each one in save/banner-standins.txt, because
+# the game keeps every banner file it has downloaded. The server now answers every summon picture itself
+# (the art comes with the game data as the summon art pack; a picture that is lost gets the server's own
+# titled banner), so nothing is made here any more. What is left to do, once: delete the game's copies of
+# the old stand-ins, so the game downloads those pictures again and gets the real ones.
 # ----------------------------------------------------------------------------------------------------
-_STANDIN_LOCK = threading.Lock()
-_GACHA_ART = '/static_banner/gacha/'
-
-
-def _standin_list() -> Path:
-    return Path(os.environ.get('FFBE_SERVER_ROOT', HOME / 'save')) / 'banner-standins.txt'
-
-
-def standin_picture(rel: str) -> bytes:
-    """A titled stand-in for the summon banner picture `rel` (the game's path, e.g. en/sd/static_banner/gacha/sub/x-fit1.png)."""
-    import banner_fit
-    import deal_art
-    plain = banner_fit.is_plain(rel)
-    real = banner_fit.real_rel(rel)
-    name = os.path.basename(real)
-    title, size = '', ((640, 392) if '/gacha/sub/' in '/' + real else (640, 160))
-    try:
-        for target, _url, label, dims in deal_art._targets():
-            if target == name:
-                title, size = label, dims
-                break
-    except Exception:  # noqa: BLE001 - an untitled stand-in is still better than the connection error
-        pass
-    data = deal_art.render(title, size)
-    if banner_fit.wants(real):
-        data, _ = banner_fit.fit(data, banner_fit.BASE_FRAME if plain else banner_fit.FRAME)
-    return data
-
-
-def note_standin(rel: str) -> None:
-    with _STANDIN_LOCK:
-        path = _standin_list()
-        try:
-            known = set(path.read_text(encoding='utf-8').split()) if path.is_file() else set()
-            if rel not in known:
-                with open(path, 'a', encoding='utf-8') as out:
-                    out.write(rel + '\n')
-        except OSError:
-            pass
-
-
-def replace_standins(log=print) -> int:
-    """Delete the game's copy of each stand-in whose real picture is now here, so the game downloads the real one."""
-    import banner_fit
-    import data_paths
+def drop_old_standins(log=print) -> int:
+    path = Path(os.environ.get('FFBE_SERVER_ROOT', HOME / 'save')) / 'banner-standins.txt'
+    if not path.is_file():
+        return 0
     game_files = HOME / 'client' / 'game' / 'files'
-    with _STANDIN_LOCK:
-        path = _standin_list()
-        if not path.is_file():
-            return 0
-        try:
-            names = path.read_text(encoding='utf-8').split()
-        except OSError:
-            return 0
-        kept, replaced = [], 0
-        for rel in names:
-            real = os.path.basename(banner_fit.real_rel(rel))
-            if os.path.isfile(os.path.join(data_paths.DEAL_ART_ROOT, real)):
-                try:
-                    (game_files / rel).unlink(missing_ok=True)
-                    replaced += 1
-                    continue
-                except OSError:
-                    pass
-            kept.append(rel)
-        try:
-            if kept:
-                path.write_text(''.join(r + '\n' for r in kept), encoding='utf-8')
-            else:
-                path.unlink(missing_ok=True)
-        except OSError:
-            pass
-    if replaced:
-        log(f'[desktop] {replaced} stand-in banner picture(s) will be replaced by the real ones')
-    return replaced
+    dropped = 0
+    try:
+        for rel in path.read_text(encoding='utf-8').splitlines():       # one name a line; some have spaces in them
+            rel = rel.strip()
+            if not rel or '..' in rel or rel.startswith(('/', '\\')) or ':' in rel:
+                continue
+            try:
+                target = game_files / rel
+                if target.is_file():
+                    target.unlink()
+                    dropped += 1
+            except OSError:
+                pass
+        path.unlink()
+    except OSError:
+        return dropped
+    log(f'[desktop] {dropped} stand-in banner picture(s) from the earlier version were removed; the game downloads the real ones')
+    return dropped
+
+
+# ----------------------------------------------------------------------------------------------------
+# The server names the game's function table in an answer the game asks for before the title screen
+# (early_tables.py: it is what makes Convert work on the iPhone), but only for a phone it knows holds that
+# table's file at that version: named without the file, the game takes a download path nobody has tried.
+# The server tells phones apart by the device number they send. The desktop game sends none, so to the
+# server every desktop install of a save is the same device, also one whose game files were set up again
+# while the save was kept. Here the file can simply be looked for: the table is only named when the game
+# folder holds it. (The desktop does not depend on this for Convert: guest/loader.c puts the conversion
+# table into the game's list itself.)
+# ----------------------------------------------------------------------------------------------------
+FUNCTION_TABLE_FILE = '6wibj9m8'          # F_FUNCTION_MST's file name in the 9.1.0 library
+
+
+def name_the_function_table_only_when_held() -> None:
+    try:
+        import early_tables
+    except ImportError:                    # a server from before that fix
+        return
+    decide = early_tables.decide
+
+    def checked(player, plaintext):
+        version, why = decide(player, plaintext)
+        if version is None:
+            return version, why
+        name = f'Ver{version}_{FUNCTION_TABLE_FILE}.dat'
+        if (HOME / 'client' / 'game' / 'files' / 'mst' / name).is_file():
+            return version, why
+        return None, f'the game folder does not hold {name}: the game files were set up again, or its tables are not downloaded yet'
+    early_tables.decide = checked
 
 
 def with_pages(handler, port: int):
     class Handler(handler):
-        def _gacha_art_or_standin(self) -> bool:
-            """Serve a summon banner picture through the server; answer a 404 with a stand-in. True when handled."""
-            import io
-            import urllib.parse
-            rel = urllib.parse.unquote(self.path.split('?', 1)[0]).lstrip('/')
-            if rel.startswith('banner/'):
-                rel = rel[len('banner/'):].lstrip('/')
-            if _GACHA_ART not in '/' + rel or not rel.lower().endswith('.png') or '..' in rel:
-                return False
-            real_out, buffer = self.wfile, io.BytesIO()
-            self.wfile = buffer
-            try:
-                super().do_GET()
-            finally:
-                self.wfile = real_out
-            answer = buffer.getvalue()
-            if not answer.startswith(b'HTTP/1.1 404') and not answer.startswith(b'HTTP/1.0 404'):
-                real_out.write(answer)
-                return True
-            try:
-                data = standin_picture(rel)
-            except Exception as exc:  # noqa: BLE001 - then the 404 as it was
-                print(f'[desktop] no stand-in for {rel}: {exc!r}', flush=True)
-                real_out.write(answer)
-                return True
-            note_standin(rel)
-            print(f'[desktop] {rel} is not on this computer yet; a stand-in picture was sent', flush=True)
-            self.send_response(200)
-            self.send_header('Content-Type', 'application/octet-stream')
-            self.send_header('Content-Length', str(len(data)))
-            self.send_header('Connection', 'close')
-            self.end_headers()
-            self.wfile.write(data)
-            self.close_connection = True
-            return True
-
         def do_GET(self):
-            if _GACHA_ART in self.path and self._gacha_art_or_standin():
-                return
             if self.path.startswith('/__desktop/page?'):
                 try:
                     status, body = page_picture(port, self.path.split('?', 1)[1])
@@ -283,7 +221,7 @@ def main() -> int:
     sys.path.insert(0, str(SERVER))
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     import net_trust
-    trust = net_trust.apply()                       # the server fetches banner art from the internet too
+    trust = net_trust.apply()                       # for the two downloads the server only makes when asked to (see its README)
     import serve
 
     serve.configure_engine()
@@ -293,20 +231,24 @@ def main() -> int:
         try:
             import event_archive
             import ios_tables
-            event_archive.fetch_added_art(log=serve.log)
+            if os.environ.get('EXVIUS_EVENT_ART_FETCH', '0') == '1':      # in the game data since 2026-11-13; see the server's README
+                event_archive.fetch_added_art(log=serve.log)
             ios_tables.art()
         except Exception as exc:  # noqa: BLE001 - art is optional; the server keeps running
             serve.log(f'background art step failed: {exc!r}')
 
-    def fetch_deal_art():
+    def fetch_deal_art():                 # does nothing unless EXVIUS_DEAL_ART_FETCH=1 asks for it: the art is in the game data
         try:
-            replace_standins(serve.log)               # real pictures fetched in an earlier session
             import deal_art
             deal_art.fetch(log=serve.log)
-            replace_standins(serve.log)
         except Exception as exc:  # noqa: BLE001
             serve.log(f'deal art step failed: {exc!r}')
 
+    name_the_function_table_only_when_held()
+    try:
+        drop_old_standins(serve.log)
+    except Exception as exc:  # noqa: BLE001 - a courtesy; never in the way of starting
+        serve.log(f'old stand-ins not removed: {exc!r}')
     threading.Thread(target=build_art, name='ios-art', daemon=True).start()
     threading.Thread(target=fetch_deal_art, name='deal-art', daemon=True).start()
     handler = with_pages(serve.make_handler(capture_server, b'', b''), args.port)

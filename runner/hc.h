@@ -28,9 +28,11 @@
 #define HC_WEB_VISIBLE   0x4041  // (on) takes the page off the screen, or puts it back
 #define HC_WEB_STATE     0x4042  // -> 0 nothing on screen, 1 loading, 2 showing, 3 could not be loaded
 #define HC_WEB_PARAM     0x4043  // (out buf, cap) -> 1 with the text of a tapped ffbecall:// link, else 0
+#define HC_TOUCH_TAKEN   0x4044  // (in a list, on its scroll bar) what the game made of the touch that just went down: 1 if one of
+                                 // its scrolling lists took it, and 1 if that was by the list's scroll bar
 #define HC_GL_BASE       0x5000  // + index into the GL name list
 
-struct HcEvent { int type; int id; float x, y; int key; int pad; };
+struct HcEvent { int type; int id; float x, y; int key; int pad; };   // id, for touches: 0 the mouse button, 1 the mouse wheel's finger
 enum { HEV_NONE, HEV_TOUCH_DOWN, HEV_TOUCH_MOVE, HEV_TOUCH_UP, HEV_KEY_DOWN, HEV_KEY_UP, HEV_QUIT, HEV_PAUSE, HEV_RESUME,
        HEV_TEXT /* key = one typed character (Unicode) */ };
 // Key codes are Android's: 4 = BACK, 66 = ENTER, 67 = DEL (Backspace).

@@ -69,6 +69,7 @@ void overlay_file_written(const char *host_path);   // the game now has its own 
 void video_init(int w, int h, const char *title);
 void video_present(void);
 int video_poll(struct HcEvent *ev);
+void video_touch_taken(int in_list, int on_bar);   // the game's word on the touch that just went down (HC_TOUCH_TAKEN)
 void video_size(int *w, int *h);
 uint64_t gl_call(int index, const uint64_t *x, uint64_t sp);
 void video_shutdown(void);

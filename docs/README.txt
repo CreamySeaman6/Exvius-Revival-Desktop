@@ -1,5 +1,7 @@
-Exvius Revival Desktop 0.1.3 (public test release)
-=================================================
+Exvius Revival Desktop (public test release)
+============================================
+
+The version is shown in the start window, beside the title.
 
 Runs FINAL FANTASY BRAVE EXVIUS 9.1.0 on a Windows PC, offline, against the same game server the
 iPhone release (Exvius Revival for iOS) uses. The server runs on this computer and only this
@@ -17,8 +19,8 @@ What you need
 - Windows 10 or 11, 64-bit, on an Intel or AMD processor.
 - Your FINAL FANTASY BRAVE EXVIUS 9.1.0 APK (Android, Global version). A single complete APK, or
   an .xapk / .apks bundle, both work. It must contain the 64-bit ARM library.
-- About 31 GB of free disk space during setup, about 15 GB afterwards (the game data is 14.6 GB;
-  the game reads it where it is and keeps only a few hundred MB of its own).
+- About 18 GB of free disk space during setup, about 16 GB afterwards (the game data is a
+  14.9 GB download; the game reads it where it is and keeps only a few hundred MB of its own).
 - A graphics driver with OpenGL 2.1 or newer (any PC from the last ten years).
 
 
@@ -51,9 +53,15 @@ The game window
   on each. A slide (pulling a unit's panel for abilities or to guard) starts from a pointer at
   rest, or is held a little longer than a click. If this gets in your way, add the line
   tap_guard=0 to client\desktop.ini.
-- The mouse wheel scrolls: turning it over the game slides a finger over that spot, so lists move
-  as they do under a thumb. Hold Shift to scroll sideways. (In a battle the same slide over a unit
-  is the game's own swipe. "Mouse wheel scrolls the game" in Settings turns it off.)
+- Lists scroll as on a phone: press, drag and let go. Let go while still moving and the list
+  glides on; stop first and it stays where you put it.
+- The mouse wheel scrolls the list under the pointer, wherever on the list the pointer is. Hold
+  Shift to scroll sideways. It never presses the button it happens to be over. (In a battle the
+  wheel over a unit is the game's own swipe. "Mouse wheel scrolls the game" in Settings turns it
+  off.)
+- A list's own scroll bar is the thin strip along its right edge. Pressing on it with the mouse
+  button moves the list to that place, and dragging it moves the list with it, as a scroll bar
+  does: down is down.
 - When the game asks for text (a name, a search), type it; Enter confirms.
 - The window has no Windows title bar. The bar along its top is the title bar: press on a free
   part of it and drag to move the window, drag the window's edges to resize it. The game's picture
@@ -92,6 +100,36 @@ drawn by the server on this computer and shown in the game. Scroll them with the
 dragging; links can be clicked. Page Up, Page Down, Home and End work too.
 
 
+Updates
+-------
+When the start window opens it asks GitHub for the newest release of this program. If there is a
+newer version, the start window shows it with a line about what changed and three choices:
+
+  Update now          downloads the update (about 15 MB), checks it, closes, replaces the program's
+                      own files and starts the new version. If the new version comes with new game
+                      data, the start window then offers to download just that.
+  Later               asks again the next time you start.
+  Skip this version   does not offer that version again; a later one is offered.
+
+Nothing is installed without your click, and it is never required. To never be asked, turn off
+"Check for a new version when the program starts" in Settings, This computer.
+
+What is sent: the request for the release list and nothing else. No identifier, no version
+number, nothing about this computer or your save.
+
+What is replaced: only the program's own parts (app, runner, server, source, the .exe and the
+three text files; python only if a release needs a newer one). client, save, data, logs, pictures
+and settings.json are never touched.
+
+If it goes wrong: the replaced files are moved to update\backup\<old version> first. If any step
+fails, or the computer is switched off half-way, everything is put back and the old version
+starts again with a message that says why; logs\update.log has the details. Nothing of yours is
+lost either way. The backup of the last update stays in update\backup and can be deleted.
+
+Without the updater (or to go back to an older version): unpack that version's zip and copy its
+contents over this folder, choosing "Replace the files in the destination".
+
+
 Settings
 --------
 "Settings" in the start window has pages for:
@@ -103,7 +141,7 @@ Settings
   Units and summons           story units, limited units, what summons can give
   Other players and the Arena made-up friends and Arena opponents
   Events and the Vortex       how archived events are listed
-  This computer               processor cores, reading the data in place, log sizes
+  This computer               the update check, processor cores, reading the data in place, log sizes
   Other settings              any other server switch, as NAME=VALUE lines
 
 These are the same switches the iPhone release keeps in docker-compose.yml, in plain words.
@@ -122,6 +160,7 @@ Everything this program creates is inside this folder:
   save\       your save (save\state) and the server's records
   logs\       server.log, launcher.log, launcher-fatal.log
   pictures\   pictures taken with the camera button
+  update\     a downloaded update while it is put in place, and the files the last update replaced
   settings.json   what was chosen in Settings
 
 Nothing is installed anywhere else: no registry entries, no services, no start-up items, no
@@ -153,10 +192,19 @@ If something goes wrong
   after "[stub] first call: _Znwm": the APK is another version of the game (often an older one
   labelled 9.1.0). Since 0.1.3 the start window says so instead. To check an APK, open it with
   7-Zip: lib/arm64-v8a/libgame.so in the 9.1.0 APK is exactly 60,410,728 bytes.
-- Some summon banners show a plain blue picture with their name: their real picture is still being
-  downloaded by the server (it fetches them from a web archive after it starts, a few at a time;
-  logs\server.log has DEAL-ART lines). The real picture replaces it the next time you open the summon
-  screen after it has arrived.
+- The start window says "New game data" after an update: the new version's server needs a data
+  pack you do not have yet (the summon art, 0.3 GB, for 0.2.0). Click "Download new game data";
+  only what is missing is downloaded.
+- Some summon banners show a plain titled picture: no picture of that banner survives. If many do,
+  the summon art has not been downloaded: see the line above.
+- Convert to Prism / Fragments is empty, or the awakening page says "Unit Not in Possession" for a
+  unit you have a second copy of: that was 0.1.3 and earlier. Update, and both work.
+- A list jumps or runs the wrong way when you scroll: that was 0.1.3 with the pointer near the
+  list's right edge, where its scroll bar is. Update. If it still happens, see FFBE_TOUCH_LOG below
+  and add FFBE_SCROLL_LOG=1 as well.
+- "The update could not be installed": nothing was changed. The message and logs\update.log say
+  why; the usual reason is a file of the program being open in another program, or an antivirus
+  holding it. Close the other program and start again: the update is offered again.
 - The game restarts with a message when you open the Vortex: part of the game's data had not been
   downloaded yet. Log in, accept the download, and open the Vortex again.
 - Your antivirus stops the game: runner.exe translates the game's code while it runs, which some
@@ -167,7 +215,8 @@ If something goes wrong
   still fails, antivirus "HTTPS scanning" is the next thing to switch off for a moment.
 - Clicks or scrolling in the game misbehave: in Settings, Other settings, add the line
   FFBE_TOUCH_LOG=1 and play again. client\runner.log then lists every touch the game was given,
-  which is what is needed to see what went wrong.
+  which is what is needed to see what went wrong. FFBE_SCROLL_LOG=1 adds what the game's lists
+  made of each touch.
 - The server did not start: the details are in logs\server.log.
 - The start window or Settings closes by itself or does not react: the details are in
   logs\launcher.log and logs\launcher-fatal.log.
@@ -178,11 +227,12 @@ If something goes wrong
 
 What is in this folder
 ----------------------
-  Exvius Revival Desktop.exe   starts app\launcher.py
+  Exvius Revival Desktop.exe   starts app\launcher.py; puts a downloaded update in place first
   app\         the start window, its settings pages, the local server start-up and the code that
                draws the in-game web pages (Python), with the fonts they use
   runner\      runner.exe (runs the game library), game.elf (the Android stand-in the library runs
-               inside), SDL2.dll, font.ttf
+               inside), SDL2.dll, font.ttf and font2.ttf (the game's text; the second has the
+               stars and symbols the first lacks)
   python\      a private copy of Python 3.12 used by the launcher and the server
   server\      the game server (the same engine as the iPhone release)
   source\      the source of runner.exe and game.elf, and the scripts that build them

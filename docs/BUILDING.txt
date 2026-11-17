@@ -42,6 +42,19 @@ ios-server/fetch_data.py, ios-server/docker-compose.yml, data/latest.json and it
      DEV=<checkout of Exvius-revival-ios> OUT=dist/ExviusRevivalDesktop sh pack.sh
 The commit it was taken from is written to server\REVISION.txt in the package.
 
+release.sh <version> makes the three files of a release from the built parts, in final/release-<version>:
+the full zip, the update zip (the program's own files without python\, which is what the updater in the
+start window downloads) and update.json (the version, the update zip's name, size and SHA-256, and the
+summary the start window shows, taken from the first paragraph of docs/RELEASE-<version>.md):
+
+     DEV=<checkout of Exvius-revival-ios> sh release.sh 0.2.0
+
+VERSION=<number> sh pack.sh labels a package with another version than app/version.py says. A package
+labelled lower than the newest release is how the updater is tried out; EXVIUS_DESKTOP_UPDATE_URL=<folder
+or address> points it at a folder that holds update.json and the update zip instead of the release page.
+test/update_p.sh runs the updater's cases under Wine.
+
+
 Debugging aids in the runner and game.elf (environment variables)
   FFBE_VERBOSE=1, VERBOSE=1      detailed log in client\runner.log (2 = also file opens)
   FFBE_CONTROL=<folder>          test control: write a file "cmd" there with lines such as
@@ -56,6 +69,12 @@ Debugging aids in the runner and game.elf (environment variables)
   FFBE_AUDIO_RESERVE=ms          sound collected before a stream starts playing (default 60)
   FFBE_VOLUME=percent            master volume
   FFBE_TOUCH_LOG=1               log every touch the game is given (down, move, up) with its frame
+  FFBE_SCROLL_LOG=1              log what the game's own scrolling lists made of each touch: which list took
+                                 it, where it stood before and after, its limits, whether the touch took the
+                                 list's scroll bar, and every other place a list's position is set from
+  FFBE_KEEP_CONVERT_AS_IS=1      leave the game's table list alone (game.elf otherwise always puts the unit
+                                 conversion table in it; with this the Convert lists are empty in a first
+                                 session, as in the game itself)
   With FFBE_VERBOSE=1 the runner logs every 5 seconds: frames shown, frames that came late
   (more than 25 ms after the one before), the longest frame, sound gaps (a playing stream that
   ran dry and then carried on) and the least sound any stream had in hand.

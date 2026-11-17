@@ -53,3 +53,27 @@ the functions the game's main thread was in while frames were overdue.
   seconds of `test/out/audio_l.raw` (16-bit stereo). Silence between tap sounds means the music has stopped.
 - What the game calls: `--env TRACE_FUNCS=@<hex offset>,...` with offsets from `nm -D libgame.so`; functions of fewer
   than four instructions, or whose first four depend on their address, cannot be traced (the log says so).
+
+## Added for 0.2.0
+
+- `session_l.sh <display number> <log> [--env NAME=VALUE ...]`: one game run in a display of its own (Xvfb and
+  openbox), stopped when the game closes. Start it as a background task; the control scripts work as before.
+- `mouse.py`: real mouse events through xdotool (`move`, `click`, `wheel`, `drag`, `flick`, `passing`), in game
+  pixels of a 640x960 picture. They go the whole way a player's mouse goes: SDL, the runner's finger, the game. The
+  control channel's `tap` and `drag` skip the runner's mouse handling.
+- `scroll.sh <runner.log>`: fourteen gestures on the list that is on the screen (wheel in the middle, on the list's
+  scroll bar and at its edges, drags with and without a rest, flicks, presses made in passing, the scroll bar
+  dragged by the button), each judged from the game's own account in the log. The game must run with
+  `--env FFBE_TOUCH_LOG=1 --env FFBE_SCROLL_LOG=1`. A list already at its end reports "did not move": read the line.
+- `engine.py <server checkout> <data> <a COPY of a save folder>`: Python from standard input with the server engine
+  loaded as the launcher loads it. For looking things up without the game.
+- `update_p.sh`: the updater under Wine. Needs `dist/ExviusRevivalDesktop` packed with a lower version
+  (`VERSION=0.1.99 OUT=dist/ExviusRevivalDesktop sh pack.sh`) and a release folder (`sh release.sh 0.2.0`;
+  `RELEASE=<folder>` for another). Five cases: `good`, `checksum`, `fail`, `stop`, `foreign`; name some to run only
+  those. Each also checks that `client`, `save`, `data`, `pictures` and `settings.json` are untouched.
+- `updater_kit.sh <release folder> [label]`: the package for trying the updater on a real PC: the program labelled
+  0.1.99 with the release's `update.json` and update zip in `update-test\` and a `.cmd` that points the check there.
+- The updater without the window: `python app/launcher.py --headless --check-update` and `--update`, with
+  `EXVIUS_DESKTOP_UPDATE_URL=<folder or http address>`.
+- Do not send control commands while `auto_l.sh` or `story_l.sh` run: both use the one `cmd` file. Look at their own
+  pictures in `test/out/auto_l` and `test/out/story_l` instead.

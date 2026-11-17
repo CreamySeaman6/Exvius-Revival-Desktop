@@ -107,6 +107,8 @@ GROUPS = [
         _t('EXVIUS_FIRST_CLEAR_BACKPAY', 'Back-pay first-clear rewards once', 'One mail with the rewards of quests cleared before first-clear rewards were paid.'),
         _t('EXVIUS_FIRST_CLEAR_MISSED', 'Mail first-clear rewards that were missed', 'At login, for quests you cleared but were never paid for.'),
         _t('EXVIUS_MISSION_GIL', 'Pay each quest\'s clear Gil', 'On every win, shown on the result screen.'),
+        _t('EXVIUS_CHEST_BACKPAY', 'Mail treasure chest items that never arrived',
+           'One mail with the equipment, materia and key items of chests you opened before chests paid them, as far as the server still has a record.'),
     ]),
     ('Drops and trust', 'What battles give.', [
         _n('EXVIUS_EVENT_CURRENCY_RUNS', 'Runs to buy out an event', 'Event currency drops are scaled so the event\'s gear, materia and units take about this many '
@@ -151,6 +153,10 @@ GROUPS = [
         _x('EXVIUS_LAPIS_SHOP_EXCLUDE', 'Products kept out of Lapis shops', 'As kind:id pairs. The default removes King Metal Minituars at 3 Lapis each. Empty puts them back.', '10:900020401'),
     ]),
     ('This computer', 'How the program runs here. Leave these alone unless something is wrong.', [
+        _t('update_check', 'Check for a new version when the program starts',
+           'Asks GitHub for the newest release and, if there is one, offers to install it: Update now, Later or Skip this version. '
+           'Nothing is installed without your click and nothing about this computer is sent. Off never asks; '
+           'switching it off and on again also forgets a skipped version.', '1', where='launcher'),
         _c('cores', 'Processor cores for the game', 'Automatic gives the game\'s drawing a core of its own and shares two more among sound and loading '
            'when the computer has four or more.', '', [('', 'Automatic'), ('1', '1'), ('2', '2'), ('3', '3'), ('4', '4')], 'launcher'),
         _t('read_data_in_place', 'Read the game data where it is', 'The game reads the server\'s files directly instead of downloading its own 5 GB copy.', '1', where='launcher'),
@@ -158,7 +164,6 @@ GROUPS = [
         _n('FFBE_REQUEST_LOG_MB', 'Request records: at most MB', 'Oldest are deleted first.', 300, 1, 100000),
         _t('EXVIUS_CLIENT_REPORTS', 'Save the game\'s own error log', 'For troubleshooting: the game uploads its log (tens of MB) once per start.', '0'),
         _n('FFBE_CLIENT_REPORTS_KEEP', 'Error logs kept', '', 30, 1, 1000),
-        _t('EXVIUS_DEAL_ART_FETCH', 'Download deal banner art once', 'From the Internet Archive, the first time the server starts. Off: those banners get a plain titled picture.'),
     ]),
 ]
 

@@ -248,6 +248,7 @@ def wrap(text: str, face: str, size: float, width: float) -> list[str]:
 
 class Page:
     """Lays the start window's lettering over the backdrop and says where the clickable lines are."""
+    version = ''                            # this program's version, shown small beside the title
 
     def __init__(self, scale: float, sprites=(), size=None):
         self.scale = scale
@@ -273,7 +274,9 @@ class Page:
             image.alpha_composite(layer, (round(x) - pad, round(y) - pad))
             return layer.width - 2 * pad
 
-        line('EXVIUS REVIVAL  DESKTOP', 'Roboto-Bold.ttf', 11.5, GOLD, left, 30 * s, spacing=3.2)
+        title = line('EXVIUS REVIVAL  DESKTOP', 'Roboto-Bold.ttf', 11.5, GOLD, left, 30 * s, spacing=3.2)
+        if self.version:
+            line(self.version, 'Roboto-Regular.ttf', 10.5, MUTED, left + title + 10 * s, 30.6 * s)
         ImageDraw.Draw(image).rectangle((left, round(52 * s), left + round(250 * s), round(52 * s) + max(1, round(s)) - 1), fill=GOLD + (120,))
         y = 64 * s
         size = 31 if max(font('Cinzel-Bold.ttf', 31 * s).getlength(part) for part in headline.split('\n')) <= 470 * s else 26

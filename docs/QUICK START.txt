@@ -2,7 +2,7 @@ Exvius Revival Desktop: quick start
 ===================================
 
 You need: Windows 10 or 11 (64-bit), your own FINAL FANTASY BRAVE EXVIUS 9.1.0 APK (Android,
-Global version; .apk, .xapk or .apks), and about 31 GB of free disk space (15 GB once set up).
+Global version; .apk, .xapk or .apks), and about 18 GB of free disk space (16 GB once set up).
 The APK must be the original game. The Exvius Offline app's APK does not work here, and nor do
 other versions of the game. In the 9.1.0 APK, lib/arm64-v8a/libgame.so is 60,410,728 bytes.
 
@@ -11,16 +11,20 @@ other versions of the game. In the 9.1.0 APK, lib/arm64-v8a/libgame.so is 60,410
 2. Double-click "Exvius Revival Desktop.exe".
    If Windows says the program is from an unknown publisher: More info, then Run anyway.
 3. Click "Choose APK or XAPK" and pick your APK. The game is copied out of it into this folder.
-4. Click "Download game data" (14.6 GB). You can close the window and carry on later.
+4. Click "Download game data" (14.9 GB). You can close the window and carry on later.
 5. Click "Play".
 
 The first time: the title screen shows some labels as codes (BTN_INFO). Tap the screen, choose
 "None" for account linking and accept the download prompt. The title screen then reads normally.
 Tap to start.
 
-Playing: click and drag are touch, the mouse wheel scrolls. The bar above the game has Back
+Playing: click and drag are touch; drag or flick a list to scroll it, or turn the mouse wheel
+over it. The bar above the game has Back
 (also Esc), volume (F9 and F10), a picture button (F12) and full screen (F11). Drag the bar to
 move the window.
+
+New versions: the start window says when there is one and offers to install it (Update now,
+Later, Skip this version). It is never required, and Settings can turn the question off.
 
 Your save is in the "save" folder here. To remove the program, delete this folder; nothing is
 installed anywhere else.

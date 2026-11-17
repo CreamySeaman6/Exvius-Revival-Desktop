@@ -19,7 +19,7 @@ runner\game.elf is built from the code in source\guest and links:
 
 runner\runner.exe also contains stb_truetype and stb_image_write (public domain / MIT).
 
-runner\font.ttf and app\fonts\
+runner\font.ttf (Roboto Regular), runner\font2.ttf (DejaVu Sans) and app\fonts\
   Roboto Regular, Bold, Italic    Apache License 2.0   https://fonts.google.com/specimen/Roboto
   Cinzel Bold                     SIL Open Font License 1.1 (app\fonts\Cinzel-OFL.txt)
                                   Copyright 2020 The Cinzel Project Authors  https://github.com/NDISCOVER/Cinzel

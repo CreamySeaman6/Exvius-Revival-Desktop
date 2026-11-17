@@ -281,6 +281,135 @@ static void check_the_vortex_town(void) {
     __builtin___clear_cache((char *)fn, (char *)(fn + 4));
 }
 
+// Convert to Prism / Fragments, and "Unit Not in Possession" on the 7-star awakening page. Both read the unit
+// conversion table (F_SACRIFICE_MST). The game builds its list of tables when the title screen opens, and puts that
+// table in only if another table, the function table, is already loaded and allows it
+// (UnitClassupUtils::isEnableSPClassup). At a fresh start it is not loaded yet, so the conversion table was never
+// downloaded or read: the Convert lists stayed empty and the awakening page found no other copy of a unit to
+// convert, whatever the player owned. The server can only make up for this from the second launch on (it names
+// the function table before the title once it knows the game holds it). Here the test is simply taken out: the
+// conversion table is always in the list, as it would be on any start after the first, so both screens work from
+// the first launch. The place is inside a function without a name (it is called from TitleScene::initConnect), so
+// it is found by its offset in the 9.1.0 library and changed only if the instructions there are exactly these:
+//   bl isEnableSPClassup ; tbz w0, #0, +20 ; bl SacrificeMstList::shared ; mov x1, x0 ; mov x0, x19 ; bl <add to the list>
+// FFBE_KEEP_CONVERT_AS_IS=1 leaves it alone (to see the game's own behaviour).
+static void always_list_the_conversion_table(void) {
+    const uintptr_t at = 0x1d3d154;
+    if (getenv("FFBE_KEEP_CONVERT_AS_IS")) { logf_("[loader] the conversion table is left to the game (FFBE_KEEP_CONVERT_AS_IS)\n"); return; }
+    if (g_image_size < at + 24) return;
+    uint32_t *w = (uint32_t *)(g_base + at);
+    uint32_t *enabled = lib_sym("_ZN16UnitClassupUtils17isEnableSPClassupEv"), *table = lib_sym("_ZN16SacrificeMstList6sharedEv");
+    if (!enabled || !table || (w[0] >> 26) != 0x25 || w[1] != 0x360000A0 || (w[2] >> 26) != 0x25 || w[3] != 0xAA0003E1 || w[4] != 0xAA1303E0 || (w[5] >> 26) != 0x25) {
+        logf_("[loader] the conversion table's place in the table list was not found; Convert works from the second launch only\n");
+        return;
+    }
+    w[1] = 0xD503201F;                                                // nop
+    __builtin___clear_cache((char *)(w + 1), (char *)(w + 2));
+    logf_("[loader] the unit conversion table is always in the game's table list (Convert, 7-star awakening)\n");
+}
+
+// Put `mine` in front of a library function. Returns the way to call the function itself (its first four
+// instructions moved to a trampoline, then on to the fifth), or NULL when it cannot be done: the function is
+// missing, shorter than that, or begins with instructions that depend on where they stand.
+static void *put_in_front(const char *symbol, void *mine) {
+    uint32_t *fn = lib_sym(symbol);
+    if (!fn || ((uintptr_t)fn & 3) || lib_sym_size(symbol) < 32) return NULL;
+    for (int i = 0; i < 4; i++) {
+        uint32_t op = fn[i];
+        if ((op & 0x1F000000) == 0x10000000 || (op & 0x7C000000) == 0x14000000 || (op & 0x7E000000) == 0x34000000 ||
+            (op & 0x7E000000) == 0x36000000 || (op & 0xFF000010) == 0x54000000 || (op & 0x3B000000) == 0x18000000) return NULL;
+    }
+    static uint32_t *page; static int used;
+    if (!page) { page = mmap(NULL, 4096, PROT_READ | PROT_WRITE | PROT_EXEC, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0); if (page == MAP_FAILED) { page = NULL; return NULL; } }
+    if (used >= 4096 / 32) return NULL;
+    uint32_t *t = page + used++ * 8;
+    memcpy(t, fn, 16);
+    t[4] = 0x58000050; t[5] = 0xD61F0200;                             // ldr x16, #8 ; br x16
+    *(uint64_t *)(t + 6) = (uint64_t)(fn + 4);
+    __builtin___clear_cache((char *)t, (char *)(t + 8));
+    fn[0] = 0x58000050; fn[1] = 0xD61F0200;
+    *(uint64_t *)(fn + 2) = (uint64_t)mine;
+    __builtin___clear_cache((char *)fn, (char *)(fn + 4));
+    return t;
+}
+
+// ---------------------------------------------------------------------------------------------------
+// The mouse wheel and the game's lists.
+// The runner turns the wheel into a finger that presses where the pointer is, slides and lifts (runner/host_gl.c),
+// and marks those touches (HcEvent.id = 1). Left to itself the game did two wrong things with such a finger:
+//  - Along the right edge of every list runs its scroll bar, and a touch within 6 pixels of it takes hold of the
+//    bar instead of the list (ScrollBar::isTouchObject, from ScrlLayer::touchBeganForScrlLayer): the list jumps to
+//    where the bar was pressed and then follows the finger as a bar does, the other way round. A turn of the wheel
+//    with the pointer there sent the list up when it should go down ("before going down it goes back up").
+//    For a wheel touch the scroll bar now says it was not touched, so the list itself slides. A press of the
+//    mouse button on the bar still moves the bar, as on the phone.
+//  - A slide that stays inside a button and is short, or sideways, is a tap to the game: it presses the button.
+//    A wheel touch never presses anything now: GameScene::buttonTouchEnded is told the touch was a scroll, which
+//    is what it is told when a list did scroll, and it lets the button go without a click.
+// The runner is also told what the game made of each touch that goes down (HC_TOUCH_TAKEN): whether one of its
+// lists took it. It holds a press made in passing back less on a list, where the usual thing is a flick.
+// Nothing is changed if a function is not found or does not begin as put_in_front needs.
+// ---------------------------------------------------------------------------------------------------
+static int g_wheel_touch;                       // the touch now down was made by the mouse wheel
+static int g_in_list, g_on_bar;                 // what the game made of it: a list took it; by its scroll bar
+static int g_scroll_log;
+static int (*scrl_began)(void *, void *, void *), (*scrl_forced)(void *, void *, void *), (*scrl_moved)(void *, void *, void *), (*scrl_ended)(void *, void *, void *);
+static int (*bar_touched)(void *, void *), (*button_ended)(void *, void *, void *, int);
+static void (*scrl_set)(void *, float *, int, int);
+// Debug aid: FFBE_SCROLL_LOG=1 logs what the game's own scrolling lists (ScrlLayer) make of each touch: which
+// layer took it, where the list stood before and after, its limits, and whether it took the touch as a slide over
+// the list, a grip on the scroll bar, or nothing; and every other place a list's position is set from. Together
+// with FFBE_TOUCH_LOG=1 (the touches the game was given) this shows why a list did or did not follow the mouse.
+// Fields of ScrlLayer in 9.1.0, read for the log only: position 816 (y), limits 840 and 848, speed after the lift
+// 832, 972 gliding on, 1000 the touch began inside the list, 1013 it is on the scroll bar, 1184 the touch is this layer's.
+static float scrl_f(void *layer, int off) { float v; memcpy(&v, (char *)layer + off, 4); return v; }
+static int scrl_b(void *layer, int off) { return ((unsigned char *)layer)[off]; }
+static void scrl_say(const char *what, void *layer, int answer, float y_before) {
+    logf_("[scroll] %s layer %p -> %d: y %.0f -> %.0f (limits %.0f..%.0f)%s%s%s%s speed %.1f\n", what, layer, answer, y_before, scrl_f(layer, 816),
+          scrl_f(layer, 840), scrl_f(layer, 848), scrl_b(layer, 1184) ? " taken" : "", scrl_b(layer, 1000) ? " in-list" : "",
+          scrl_b(layer, 1013) ? " ON-THE-SCROLL-BAR" : "", scrl_b(layer, 972) ? " gliding" : "", scrl_f(layer, 832));
+}
+static int scrl_began_hook(void *l, void *t, void *e) {
+    float y = g_scroll_log ? scrl_f(l, 816) : 0;
+    int r = scrl_began(l, t, e) & 1;
+    if (r) g_in_list = 1;
+    if (g_scroll_log && (r || scrl_b(l, 1184))) scrl_say("began", l, r, y);
+    return r;
+}
+static int bar_touched_hook(void *bar, void *touch) {
+    if (g_wheel_touch) return 0;
+    int r = bar_touched(bar, touch) & 1;
+    if (r) g_on_bar = 1;
+    return r;
+}
+static int button_ended_hook(void *scene, void *touch, void *event, int scrolled) { return button_ended(scene, touch, event, g_wheel_touch ? 1 : scrolled); }
+static int scrl_forced_log(void *l, void *t, void *e) { float y = scrl_f(l, 816); int r = scrl_forced(l, t, e); scrl_say("began (handed over)", l, r & 1, y); return r; }
+static int scrl_moved_log(void *l, void *t, void *e) { float y = scrl_f(l, 816); int taken = scrl_b(l, 1184); int r = scrl_moved(l, t, e); if (taken) scrl_say("moved", l, r & 1, y); return r; }
+static int scrl_ended_log(void *l, void *t, void *e) { float y = scrl_f(l, 816); int taken = scrl_b(l, 1184); int r = scrl_ended(l, t, e); if (taken) scrl_say("ended", l, r & 1, y); return r; }
+static void scrl_set_log(void *l, float *to, int a, int b) {
+    uintptr_t off = 0; const char *caller = lib_addr_name((uintptr_t)__builtin_return_address(0), &off);
+    static unsigned long said;
+    // The slide itself is in the lines above, and every scene makes its hundred layers at 0,0: neither is told.
+    int routine = caller && (!strncmp(caller, "_ZN9ScrlLayer9scrlLayer", 23) || !strncmp(caller, "_ZN9ScrlLayer4init", 18) || !strncmp(caller, "_ZN9ScrlLayerC", 14));
+    if (!routine && said++ < 4000)
+        logf_("[scroll] set layer %p to %.0f,%.0f (%d %d) from %s+%#lx; it stood at %.0f\n", l, to[0], to[1], a, b, caller ? caller : "?", (unsigned long)off, scrl_f(l, 816));
+    scrl_set(l, to, a, b);
+}
+static void mind_the_wheel(void) {
+    scrl_began = put_in_front("_ZN9ScrlLayer22touchBeganForScrlLayerEPN7cocos2d5TouchEPNS0_5EventE", scrl_began_hook);
+    bar_touched = put_in_front("_ZN9ScrollBar13isTouchObjectEPN7cocos2d5TouchE", bar_touched_hook);
+    button_ended = put_in_front("_ZN9GameScene16buttonTouchEndedEPN7cocos2d5TouchEPNS0_5EventEb", button_ended_hook);
+    logf_("[loader] mouse wheel: the scroll bar is %s, buttons are %s; lists %s what they took\n", bar_touched ? "left alone" : "NOT left alone",
+          button_ended ? "not pressed" : "STILL pressed", scrl_began ? "say" : "do NOT say");
+    g_scroll_log = getenv("FFBE_SCROLL_LOG") != NULL;
+    if (!g_scroll_log) return;
+    scrl_forced = put_in_front("_ZN9ScrlLayer26forcingTouchBeganScrlLayerEPN7cocos2d5TouchEPNS0_5EventE", scrl_forced_log);
+    scrl_moved = put_in_front("_ZN9ScrlLayer22touchMovedForScrlLayerEPN7cocos2d5TouchEPNS0_5EventE", scrl_moved_log);
+    scrl_ended = put_in_front("_ZN9ScrlLayer22touchEndedForScrlLayerEPN7cocos2d5TouchEPNS0_5EventE", scrl_ended_log);
+    scrl_set = put_in_front("_ZN9ScrlLayer17setScrollPositionEN7cocos2d4Vec2Ebb", scrl_set_log);
+    logf_("[loader] scroll log: handed over %d, moved %d, ended %d, set %d\n", !!scrl_forced, !!scrl_moved, !!scrl_ended, !!scrl_set);
+}
+
 void stub_report(void) {
     logf_("\n== unimplemented imports that were called ==\n");
     for (int i = 0; i < n_stubs; i++) if (stub_calls[i]) logf_("  %8lu  %s\n", stub_calls[i], stub_names[i]);
@@ -473,6 +602,8 @@ int main(int argc, char **argv) {
     keep_music_through_notice_movies();
     load_background_tables_at_once();
     check_the_vortex_town();
+    always_list_the_conversion_table();
+    mind_the_wheel();
     int (*onload)(void *, void *) = lib_sym("JNI_OnLoad");
     int v = onload(vm, NULL);
     logf_("[jni] JNI_OnLoad returned 0x%x\n", v);
@@ -484,8 +615,12 @@ int main(int argc, char **argv) {
     void (*nativeInit)(void *, void *, int, int) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeInit");
     void (*surfaceChanged)(void *, void *, int, int) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeOnSurfaceChanged");
     void (*render)(void *, void *) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeRender");
-    void (*touchBegin)(void *, void *, int, float, float) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeTouchesBegin");
-    void (*touchEnd)(void *, void *, int, float, float) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeTouchesEnd");
+    // The game's own versions of these two take one more number than cocos2d-x's: a delay in seconds. Above zero, the
+    // touch is not handled now but put on the scheduler for later. It must be passed, as 0: left out, the game reads
+    // whatever the last calculation left in that register, and a touch began or ended seconds late or, to the player,
+    // never (a button stayed lit and unpressed, and the next click was lost on ending the old touch).
+    void (*touchBegin)(void *, void *, int, float, float, float) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeTouchesBegin");
+    void (*touchEnd)(void *, void *, int, float, float, float) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeTouchesEnd");
     void (*touchMove)(void *, void *, void *, void *, void *) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeTouchesMove");
     int (*keyEvent)(void *, void *, int, int) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeKeyEvent");
     void (*onPause)(void *, void *) = lib_sym("Java_org_cocos2dx_lib_Cocos2dxRenderer_nativeOnPause");
@@ -526,8 +661,12 @@ int main(int argc, char **argv) {
             struct HcEvent ev;
             while (hc(HC_POLL_EVENT, (long)&ev, 0, 0, 0)) {
                 if (ev.type == HEV_QUIT) { logf_("[boot] window closed\n"); jni_report(); exit(0); }
-                if (ev.type == HEV_TOUCH_DOWN) touchBegin(env, activity, 0, ev.x, ev.y);
-                if (ev.type == HEV_TOUCH_UP) touchEnd(env, activity, 0, ev.x, ev.y);
+                if (ev.type == HEV_TOUCH_DOWN) {              // and the runner is told what the game made of it (see mind_the_wheel)
+                    g_wheel_touch = ev.id == 1; g_in_list = g_on_bar = 0;
+                    touchBegin(env, activity, 0, ev.x, ev.y, 0.0f);
+                    hc(HC_TOUCH_TAKEN, g_in_list, g_on_bar, 0, 0);
+                }
+                if (ev.type == HEV_TOUCH_UP) { touchEnd(env, activity, 0, ev.x, ev.y, 0.0f); g_wheel_touch = 0; }
                 if (ev.type == HEV_TOUCH_MOVE) { int id = 0; touchMove(env, activity, jni_new_prim_array(1, 4, &id), jni_new_prim_array(1, 4, &ev.x), jni_new_prim_array(1, 4, &ev.y)); }
                 if (ev.type == HEV_TEXT && g_ime_open && insertText) {
                     char u[8]; int c = ev.key, n = 0;
@@ -552,8 +691,8 @@ int main(int argc, char **argv) {
             }
         }
         for (int k = 0; k < ntaps; k++) {
-            if (taps[k].f == i) { logf_("[input] tap at %.0f,%.0f (frame %d)\n", taps[k].x, taps[k].y, i); touchBegin(env, activity, 0, taps[k].x, taps[k].y); }
-            if (taps[k].f + 4 == i) touchEnd(env, activity, 0, taps[k].x, taps[k].y);
+            if (taps[k].f == i) { logf_("[input] tap at %.0f,%.0f (frame %d)\n", taps[k].x, taps[k].y, i); touchBegin(env, activity, 0, taps[k].x, taps[k].y, 0.0f); }
+            if (taps[k].f + 4 == i) touchEnd(env, activity, 0, taps[k].x, taps[k].y, 0.0f);
         }
         jni_run_queue();
         if (g_runner && g_web_visible && webParam) {                 // a link in the in-game page that speaks to the game (ffbecall://...)
